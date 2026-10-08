@@ -1,0 +1,10 @@
+.git
+.env
+.env.*
+public/_legacy
+public/sito.zip
+public/ZeroTheLegend/
+public/uploads/skins/*
+!public/uploads/skins/.htaccess
+!public/uploads/skins/.keep
+ett.zip

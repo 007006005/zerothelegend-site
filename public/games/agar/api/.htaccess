@@ -1,0 +1,10 @@
+# Passa l'header Authorization a PHP (necessario su molti hosting con CGI/FastCGI)
+RewriteEngine On
+RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+
+<Files "config.php">
+  Require all denied
+</Files>
+<Files "bootstrap.php">
+  Require all denied
+</Files>

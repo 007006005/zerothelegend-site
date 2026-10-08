@@ -1,0 +1,26 @@
+# ZeroArcade - configurazione Apache (IONOS)
+DirectoryIndex index.php
+Options -Indexes
+
+<IfModule mod_php.c>
+  php_value upload_max_filesize 12M
+  php_value post_max_size 14M
+</IfModule>
+<IfModule mod_php7.c>
+  php_value upload_max_filesize 12M
+  php_value post_max_size 14M
+</IfModule>
+<IfModule mod_php8.c>
+  php_value upload_max_filesize 12M
+  php_value post_max_size 14M
+</IfModule>
+
+# File di progetto/sviluppo e di configurazione: mai serviti al browser
+<FilesMatch "(^\.|\.(lock|ts|tsx|md|txt|example|env|sql|sqlite|log|bak|ini)$|^config\.php$|^index\.html$|^composer\.json$|^package\.json$)">
+  Require all denied
+</FilesMatch>
+
+# Permesso esplicito per manifest.json
+<Files "manifest.json">
+  Require all granted
+</Files>

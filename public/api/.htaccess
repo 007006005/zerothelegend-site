@@ -1,0 +1,8 @@
+# db.php e registry.php sono solo librerie incluse da PHP, non endpoint
+<FilesMatch "^(db|registry)\.php$">
+  Require all denied
+</FilesMatch>
+# nessuna cache sulle risposte API
+<IfModule mod_headers.c>
+  Header set Cache-Control "no-store"
+</IfModule>
