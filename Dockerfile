@@ -1,7 +1,11 @@
 FROM php:8.3-apache
 
 RUN docker-php-ext-install pdo_mysql \
-    && a2enmod rewrite headers
+    && for module in mpm_event mpm_worker mpm_prefork; do \
+        if [ -L "/etc/apache2/mods-enabled/${module}.load" ]; then a2dismod "${module}"; fi; \
+    done \
+    && a2enmod mpm_prefork rewrite headers \
+    && test "$(apache2ctl -M 2>/dev/null | grep -Ec 'mpm_(event|worker|prefork)_module')" -eq 1
 
 COPY public/ /var/www/html/
 
