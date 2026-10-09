@@ -9138,13 +9138,18 @@
             };
             tabLogin.addEventListener('click', () => setMode('login'));
             tabReg.addEventListener('click', () => setMode('register'));
-            form.addEventListener('submit', (e) => {
+            form.addEventListener('submit', async (e) => {
               e.preventDefault();
               const name = document.getElementById('za-auth-name').value;
               const pin = document.getElementById('za-auth-pin').value;
+              const mode = authMode;
               msg.textContent = '';
-              const ok = authMode === 'login' ? loginAccount(name, pin) : registerAccount(name, pin);
-              if (!ok) msg.textContent = authMode === 'login' ? 'Credenziali non valide o account non ancora registrato.' : 'Controlla nickname e PIN.';
+              const ok = mode === 'login'
+                ? await loginAccount(name, pin)
+                : await registerAccount(name, pin);
+              if (!ok) msg.textContent = mode === 'login'
+                ? 'Accesso non riuscito. Controlla i dati o riprova più tardi.'
+                : 'Registrazione non riuscita. Controlla i dati o riprova più tardi.';
             });
             return;
           }
