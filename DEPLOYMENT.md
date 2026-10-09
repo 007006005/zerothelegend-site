@@ -14,6 +14,8 @@ The DNS destinations are assigned by Railway and must be copied from its custom-
 2. Set the Railway service root directory to `/tttt` if the Git repository root is its parent folder; leave it at `/` if `tttt` itself is the Git repository root. Railway must see `Dockerfile` and `railway.json` together at the selected root.
 3. Deploy the service. The Docker image serves the PHP application from `public/`.
 
+The PHP API must detect HTTPS behind Railway's reverse proxy before setting secure session cookies; otherwise auth sessions can fail after the app is reached through the generated domain.
+
 Set these variables in the Railway service. Use the production database values from the hosting provider, never values from `.env.example`.
 
 | Variable | Required | Purpose |
@@ -36,7 +38,7 @@ Keep `.env` local and out of Git. Configure environment variables in Railway's s
 
 ## Authentication and API checks
 
-The active API bootstrap provides the shared database, session, authentication, and JSON helpers used by the login and profile endpoints. Its login rate limiter creates an `auth_attempts` table automatically, so the Railway database user needs permission to create tables. Before relying on account persistence, configure Railway's MySQL variables and verify registration, login, account-name display, refresh/session restoration, and logout against the production database. The existing database must include the columns used by `public/api/auth.php` and the profile endpoints; keep a database backup before schema changes.
+The active API bootstrap provides the shared database, session, authentication, and JSON helpers used by the login and profile endpoints. Both the portal and the standalone `games/growth_orbit.php` account form use `/api/auth.php`, so registrations and logins are stored in the Railway `users` table rather than only in browser storage. On the first registration or login request, the API creates the `users` and `user_state` tables only when they are missing; the login rate limiter similarly creates `auth_attempts`. The Social API creates its `social_*` tables on first use if they are missing. The Railway database user therefore needs permission to create these tables on a new database. Existing tables are never altered automatically: an incompatible existing schema must be migrated after taking a database backup. Verify registration, login, account-name display, refresh/session restoration, and logout against the production database.
 
 ## FTP
 
