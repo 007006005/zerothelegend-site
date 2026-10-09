@@ -11392,7 +11392,22 @@
           return '<div class="fb-suite-grid"><main><div class="fb-suite-panel"><div class="fb-suite-title">'+escapeHtml(nm)+', cosa vuoi condividere?</div><form class="fb-suite-form" id="fb-post-form"><textarea id="fb-post-text" maxlength="5000" placeholder="Scrivi un post, condividi un risultato o lancia una sfida..."></textarea><div class="fb-suite-actions"><select id="fb-post-visibility"><option value="public">🌐 Pubblico</option><option value="friends">👥 Amici</option><option value="only_me">🔒 Solo io</option></select><button type="submit">PUBBLICA</button></div></form></div><div class="fb-suite-panel"><div class="fb-suite-title">Storie</div><form class="fb-suite-form" id="fb-story-form"><input id="fb-story-text" maxlength="1000" placeholder="Crea una storia che dura 24 ore"/><button>+ CREA STORIA</button></form><div class="fb-suite-list" style="margin-top:10px">'+(fbSuiteData.stories||[]).slice(0,8).map(s=>fbUserRow(s.author||{name:'Utente'},s.body)).join('')+'</div></div><div>'+((fbSuiteData.feed||[]).length?(fbSuiteData.feed||[]).map(fbPostHtml).join(''):'<div class="fb-suite-panel fb-suite-muted">Il feed è vuoto. Pubblica il primo post.</div>')+'</div></main><aside><div class="fb-suite-panel"><div class="fb-suite-title">Centro notifiche</div><div class="fb-suite-list">'+((fbSuiteData.notifications||[]).slice(0,8).map(n=>'<div class="fb-suite-item '+(!n.read?'fb-notify-unread':'')+'"><b>'+escapeHtml(n.type)+'</b><div class="fb-suite-muted">'+escapeHtml(n.created||'')+'</div></div>').join('')||'<div class="fb-suite-muted">Nessuna notifica</div>')+'</div></div><div class="fb-suite-panel"><div class="fb-suite-title">Statistiche</div><div class="fb-suite-kpis"><div class="fb-suite-kpi">Amici<b>'+((fbSuiteData.friends||[]).filter(x=>x.status==='accepted').length)+'</b></div><div class="fb-suite-kpi">Messaggi<b>'+((fbSuiteData.messages||[]).length)+'</b></div><div class="fb-suite-kpi">Gruppi<b>'+((fbSuiteData.groups||[]).length)+'</b></div><div class="fb-suite-kpi">Pagine<b>'+((fbSuiteData.pages||[]).length)+'</b></div></div></div></aside></div>';
         }
         function fbRenderFriends(){
-          const friends=fbSuiteData.friends||[]; return '<div class="fb-suite-grid"><main><div class="fb-suite-panel"><div class="fb-suite-title">Amici e richieste</div><form class="fb-suite-form" id="fb-friend-search"><input id="fb-friend-q" placeholder="Cerca username..."/><button>CERCA</button></form><div id="fb-friend-results" class="fb-suite-list" style="margin-top:10px"></div></div><div class="fb-suite-panel"><div class="fb-suite-title">La tua rete</div><div class="fb-suite-list">'+(friends.length?friends.map(f=>fbUserRow(f,(f.status==='pending'?'Richiesta in sospeso':'Stato: '+f.status)+(f.status==='pending'?' · richiesta da '+f.requested_by:''))).join(''):'<div class="fb-suite-muted">Nessun contatto ancora.</div>')+'</div></div></main><aside><div class="fb-suite-panel"><div class="fb-suite-title">Cosa puoi fare</div><div class="fb-suite-muted">Invia richieste, accetta o rifiuta, segui utenti e gestisci blocchi.</div></div></aside></div>';
+          const friends=fbSuiteData.friends||[]; return '<div class="fb-suite-grid"><main><div class="fb-suite-panel"><div class="fb-suite-title">Amici e richieste</div><form class="fb-suite-form" id="fb-friend-search"><input id="fb-friend-q" placeholder="Cerca username..."/><button>CERCA</button></form><div id="fb-friend-status" class="fb-suite-muted" role="status" aria-live="polite" style="margin-top:8px"></div><div id="fb-friend-results" class="fb-suite-list" style="margin-top:10px"></div></div><div class="fb-suite-panel"><div class="fb-suite-title">La tua rete</div><div id="fb-friend-network" class="fb-suite-list">'+fbFriendNetworkHtml(friends)+'</div></div></main><aside><div class="fb-suite-panel"><div class="fb-suite-title">Cosa puoi fare</div><div class="fb-suite-muted">Invia richieste, accetta o rifiuta, segui utenti e gestisci blocchi.</div></div></aside></div>';
+        }
+        function fbFriendNetworkHtml(friends) {
+          return friends.length
+            ? friends.map(f=>fbUserRow(f,(f.status==='pending'?'Richiesta in sospeso':'Stato: '+f.status)+(f.status==='pending'?' · richiesta da '+f.requested_by:''))).join('')
+            : '<div class="fb-suite-muted">Nessun contatto ancora.</div>';
+        }
+        function fbFriendResultHtml(users) {
+          return users.filter(u=>String(u.id)!==String(profile.id)).map(u=>{
+            const relation=(fbSuiteData.friends||[]).find(f=>String(f.id)===String(u.id));
+            let label='AGGIUNGI', action='add';
+            if(relation?.status==='accepted'){label='AMICI';action='none';}
+            else if(relation?.status==='pending'&&String(relation.requested_by)===String(profile.id)){label='RICHIESTA INVIATA';action='none';}
+            else if(relation?.status==='pending'){label='ACCETTA RICHIESTA';action='accept';}
+            return '<div class="fb-suite-item" style="display:flex;align-items:center;gap:8px"><b style="flex:1">'+escapeHtml(u.name)+'</b><button type="button" data-fb-addfriend="'+escapeHtml(u.id)+'" data-fb-friend-action="'+action+'" '+(action==='none'?'disabled':'')+'>'+label+'</button></div>';
+          }).join('')||'<div class="fb-suite-muted">Nessun utente trovato.</div>';
         }
         function fbRenderMessages(){
           const msgs=fbSuiteData.messages||[]; const first=msgs[0]; const peer=first?.peer?.name||''; const thread=first?.thread||''; return '<div class="fb-suite-grid"><main><div class="fb-suite-panel"><div class="fb-suite-title">Messenger</div><form class="fb-suite-form" id="fb-msg-form"><input id="fb-msg-to" placeholder="User ID destinatario" value="'+escapeHtml(peer)+'"/><textarea id="fb-msg-body" placeholder="Scrivi un messaggio..."></textarea><button>INVIA</button></form><div class="fb-message-log" style="margin-top:10px">'+msgs.slice(0,40).map(m=>'<div class="fb-msg '+(m.from===profile.id?'me':'')+'"><b>'+escapeHtml(m.peer?.name||'Utente')+'</b><div>'+escapeHtml(m.body||'')+'</div><small class="fb-suite-muted">'+escapeHtml(m.created||'')+'</small></div>').join('')+'</div></div></main><aside><div class="fb-suite-panel"><div class="fb-suite-title">Conversazioni</div><div class="fb-suite-list">'+(msgs.length?msgs.slice(0,15).map(m=>fbUserRow(m.peer, m.body)).join(''):'<div class="fb-suite-muted">Nessun messaggio.</div>')+'</div></div></aside></div>';
@@ -11409,14 +11424,14 @@
           ptBodyEl.querySelectorAll('[data-fbtab]').forEach(b=>b.addEventListener('click',e=>{e.preventDefault();fbSuiteTab=b.dataset.fbtab;renderPortal();}));
           const pf=ptBodyEl.querySelector('#fb-post-form'); if(pf) pf.addEventListener('submit',async e=>{e.preventDefault();try{await socialApi('post_create',{body:ptBodyEl.querySelector('#fb-post-text').value,visibility:ptBodyEl.querySelector('#fb-post-visibility').value});await loadSocialSuite(true);notify('Post pubblicato','#00ffa2');renderPortal();}catch(x){notify(x.message,'#ff5c7a');}});
           const sf=ptBodyEl.querySelector('#fb-story-form'); if(sf) sf.addEventListener('submit',async e=>{e.preventDefault();try{await socialApi('story_create',{body:ptBodyEl.querySelector('#fb-story-text').value});await loadSocialSuite(true);notify('Storia pubblicata','#00ffa2');renderPortal();}catch(x){notify(x.message,'#ff5c7a');}});
-          const ff=ptBodyEl.querySelector('#fb-friend-search'); if(ff) ff.addEventListener('submit',async e=>{e.preventDefault();const q=ptBodyEl.querySelector('#fb-friend-q').value;try{const r=await socialApi('search',{q});const box=ptBodyEl.querySelector('#fb-friend-results');box.innerHTML=(r.users||[]).map(u=>'<div class="fb-suite-item"><b>'+escapeHtml(u.name)+'</b><button data-fb-addfriend="'+u.id+'" style="float:right">AGGIUNGI</button></div>').join('')||'<div class="fb-suite-muted">Nessun utente.</div>';bindFacebookSuite();}catch(x){notify(x.message,'#ff5c7a');}});
+          const ff=ptBodyEl.querySelector('#fb-friend-search'); if(ff) ff.addEventListener('submit',async e=>{e.preventDefault();const q=ptBodyEl.querySelector('#fb-friend-q').value.trim();const box=ptBodyEl.querySelector('#fb-friend-results');const status=ptBodyEl.querySelector('#fb-friend-status');if(!q){status.textContent='Inserisci un username da cercare.';box.innerHTML='';return;}status.textContent='Ricerca in corso…';try{const r=await socialApi('search',{q});box.innerHTML=fbFriendResultHtml(r.users||[]);status.textContent=(r.users||[]).length?'Seleziona AGGIUNGI per inviare la richiesta.':'Nessun utente trovato.';bindFriendResultActions(box);}catch(x){status.textContent=x.message||'Ricerca non riuscita.';box.innerHTML='';}});
           ptBodyEl.querySelectorAll('[data-fb-react]').forEach(b=>b.addEventListener('click',async e=>{e.preventDefault();try{await socialApi('post_react',{post_id:b.dataset.fbReact,reaction:b.dataset.fbReaction});await loadSocialSuite(true);renderPortal();}catch(x){notify(x.message,'#ff5c7a');}}));
           ptBodyEl.querySelectorAll('[data-fb-comment]').forEach(f=>f.addEventListener('submit',async e=>{e.preventDefault();const i=f.querySelector('input');try{await socialApi('post_comment',{post_id:f.dataset.fbComment,body:i.value});i.value='';await loadSocialSuite(true);renderPortal();}catch(x){notify(x.message,'#ff5c7a');}}));
           ptBodyEl.querySelectorAll('[data-fb-share]').forEach(b=>b.addEventListener('click',async e=>{e.preventDefault();try{await socialApi('post_share',{post_id:b.dataset.fbShare});await loadSocialSuite(true);renderPortal();}catch(x){notify(x.message,'#ff5c7a');}}));
           ptBodyEl.querySelectorAll('[data-fb-save]').forEach(b=>b.addEventListener('click',async e=>{e.preventDefault();try{await socialApi('post_save',{post_id:b.dataset.fbSave});await loadSocialSuite(true);renderPortal();}catch(x){notify(x.message,'#ff5c7a');}}));
           ptBodyEl.querySelectorAll('[data-fb-delete]').forEach(b=>b.addEventListener('click',async e=>{e.preventDefault();if(!confirm('Eliminare questo post?'))return;try{await socialApi('post_delete',{post_id:b.dataset.fbDelete});await loadSocialSuite(true);renderPortal();}catch(x){notify(x.message,'#ff5c7a');}}));
           ptBodyEl.querySelectorAll('[data-fb-report]').forEach(b=>b.addEventListener('click',async e=>{e.preventDefault();const reason=prompt('Motivo della segnalazione:');if(!reason)return;try{await socialApi('report',{target_type:'post',target_id:b.dataset.fbReport,reason});notify('Segnalazione inviata','#ffc94a');}catch(x){notify(x.message,'#ff5c7a');}}));
-          ptBodyEl.querySelectorAll('[data-fb-addfriend]').forEach(b=>b.addEventListener('click',async e=>{e.preventDefault();try{await socialApi('friend_request',{user_id:b.dataset.fbAddfriend});notify('Richiesta inviata','#00ffa2');}catch(x){notify(x.message,'#ff5c7a');}}));
+          bindFriendResultActions(ptBodyEl);
           const mf=ptBodyEl.querySelector('#fb-msg-form'); if(mf) mf.addEventListener('submit',async e=>{e.preventDefault();try{await socialApi('message_send',{user_id:mf.querySelector('#fb-msg-to').value,body:mf.querySelector('#fb-msg-body').value});mf.querySelector('#fb-msg-body').value='';await loadSocialSuite(true);renderPortal();}catch(x){notify(x.message,'#ff5c7a');}});
           const gf=ptBodyEl.querySelector('#fb-group-form'); if(gf) gf.addEventListener('submit',async e=>{e.preventDefault();try{await socialApi('group_create',{name:gf.querySelector('#fb-group-name').value,description:gf.querySelector('#fb-group-desc').value});await loadSocialSuite(true);renderPortal();}catch(x){notify(x.message,'#ff5c7a');}});
           ptBodyEl.querySelectorAll('[data-fb-group]').forEach(b=>b.addEventListener('click',async e=>{e.preventDefault();try{if(b.dataset.fbJoin)await socialApi('group_join',{group_id:b.dataset.fbGroup,join:true});if(b.dataset.fbFollow)await socialApi('follow',{target_type:'group',target_id:b.dataset.fbGroup});await loadSocialSuite(true);renderPortal();}catch(x){notify(x.message,'#ff5c7a');}}));
@@ -11427,6 +11442,33 @@
           const mk=ptBodyEl.querySelector('#fb-market-form'); if(mk) mk.addEventListener('submit',async e=>{e.preventDefault();try{await socialApi('market_create',{title:mk.querySelector('#fb-market-title').value,price:mk.querySelector('#fb-market-price').value,location:mk.querySelector('#fb-market-location').value,description:mk.querySelector('#fb-market-desc').value});await loadSocialSuite(true);renderPortal();}catch(x){notify(x.message,'#ff5c7a');}});
           ptBodyEl.querySelectorAll('[data-fb-notify-read]').forEach(b=>b.addEventListener('click',async e=>{e.preventDefault();await socialApi('notify_read',{id:b.dataset.fbNotifyRead});await loadSocialSuite(true);renderPortal();}));
           const all=ptBodyEl.querySelector('[data-fb-mark-all-read]');if(all)all.addEventListener('click',async e=>{e.preventDefault();await socialApi('notify_read',{});await loadSocialSuite(true);renderPortal();});
+        }
+        function bindFriendResultActions(root) {
+          root.querySelectorAll('[data-fb-addfriend]').forEach(button=>button.addEventListener('click',async e=>{
+            e.preventDefault();
+            const status=ptBodyEl.querySelector('#fb-friend-status');
+            if(!profile.loggedIn){if(status)status.textContent='Accedi al tuo account per inviare o accettare richieste di amicizia.';return;}
+            const action=button.dataset.fbFriendAction;
+            if(action==='none')return;
+            const oldLabel=button.textContent;
+            button.disabled=true;
+            button.textContent=action==='accept'?'ACCETTO…':'INVIO…';
+            try{
+              if(action==='accept') await socialApi('friend_respond',{user_id:button.dataset.fbAddfriend,status:'accepted'});
+              else await socialApi('friend_request',{user_id:button.dataset.fbAddfriend});
+              await loadSocialSuite(true);
+              const relation=(fbSuiteData.friends||[]).find(f=>String(f.id)===String(button.dataset.fbAddfriend));
+              if(relation?.status==='accepted'){button.textContent='AMICI';button.dataset.fbFriendAction='none';}
+              else{button.textContent='RICHIESTA INVIATA';button.dataset.fbFriendAction='none';}
+              if(status)status.textContent=action==='accept'?'Richiesta accettata: ora siete amici.':'Richiesta di amicizia inviata.';
+              const network=ptBodyEl.querySelector('#fb-friend-network');
+              if(network)network.innerHTML=fbFriendNetworkHtml(fbSuiteData.friends||[]);
+            }catch(x){
+              button.disabled=false;
+              button.textContent=oldLabel;
+              if(status)status.textContent=x.message||'Operazione non riuscita.';
+            }
+          }));
         }
         function renderYouTubeLayout(section) {
           ensureSocial();
