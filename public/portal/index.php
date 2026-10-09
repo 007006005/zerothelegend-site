@@ -532,114 +532,6 @@
           pointer-events: none;
       }
 
-      #chat-panel {
-          position: absolute;
-          left: 16px;
-          bottom: 186px;
-          width: 272px;
-          z-index: 14;
-          font-family: 'Inter', sans-serif;
-          display: flex;
-          flex-direction: column;
-          align-items: flex-start;
-      }
-
-      #chat-body {
-          display: none;
-          flex-direction: column;
-          width: 100%;
-          height: 224px;
-          margin-bottom: 8px;
-          border-radius: 12px;
-          border: 1px solid rgba(0, 240, 255, 0.3);
-          background: rgba(4, 8, 22, 0.78);
-          overflow: hidden;
-      }
-
-      #chat-panel.open #chat-body { display: flex; }
-
-      #chat-log {
-          flex: 1;
-          overflow-y: auto;
-          padding: 8px;
-          font-size: 13px;
-          line-height: 1.45;
-          color: rgba(255, 255, 255, 0.86);
-      }
-
-      .chat-msg .who { color: #00f0ff; font-weight: 600; }
-      .chat-msg.me .who { color: #ffe600; }
-      .chat-msg.sys { color: rgba(255, 255, 255, 0.45); font-style: italic; }
-
-      #chat-form { display: flex; gap: 6px; padding: 6px; border-top: 1px solid rgba(0, 240, 255, 0.2); }
-
-      #chat-input {
-          flex: 1;
-          min-width: 0;
-          background: rgba(0, 0, 0, 0.4);
-          border: 1px solid rgba(0, 240, 255, 0.25);
-          border-radius: 8px;
-          color: #fff;
-          padding: 8px;
-          font-size: 14px;
-          outline: none;
-      }
-
-      #chat-send {
-          width: 54px;
-          border-radius: 8px;
-          border: 1px solid rgba(0, 240, 255, 0.4);
-          background: rgba(0, 180, 255, 0.28);
-          color: #fff;
-          font-weight: 700;
-          cursor: pointer;
-      }
-
-      .quick-emotes { display: flex; gap: 5px; padding: 0 6px 6px; }
-
-      .quick-emotes button {
-          flex: 1;
-          padding: 5px 0;
-          background: rgba(0, 0, 0, 0.35);
-          border: 1px solid rgba(0, 240, 255, 0.22);
-          color: #fff;
-          border-radius: 6px;
-          font-size: 16px;
-          cursor: pointer;
-      }
-
-      #chat-toggle {
-          position: relative;
-          width: 108px;
-          height: 54px;
-          border-radius: 14px;
-          border: 1px solid rgba(0, 240, 255, 0.5);
-          background: rgba(6, 14, 34, 0.78);
-          color: #00f0ff;
-          font-family: 'Orbitron', sans-serif;
-          font-size: 13px;
-          font-weight: 700;
-          letter-spacing: 1px;
-          cursor: pointer;
-          -webkit-tap-highlight-color: transparent;
-      }
-
-      #chat-badge {
-          position: absolute;
-          top: -6px;
-          right: -6px;
-          min-width: 22px;
-          height: 22px;
-          border-radius: 11px;
-          background: #ff2d6b;
-          color: #fff;
-          font-size: 12px;
-          line-height: 22px;
-          display: none;
-      }
-
-      #chat-badge.show { display: block; }
-
       .overlay-panel {
           position: absolute;
           inset: 0;
@@ -3026,23 +2918,6 @@
         <canvas id="minimap" width="156" height="156"></canvas>
         <div id="minimap-label">MAP</div>
       </div>
-      <div id="chat-panel">
-        <div id="chat-body">
-          <div id="chat-log"></div>
-          <div class="quick-emotes">
-            <button data-emote="gg!">GG</button>
-            <button data-emote="&#128128;">&#128128;</button>
-            <button data-emote="&#128293;">&#128293;</button>
-            <button data-emote="&#129504;">&#129504;</button>
-            <button data-emote="&#128075;">&#128075;</button>
-          </div>
-          <form id="chat-form" autocomplete="off">
-            <input id="chat-input" maxlength="120" placeholder="Global chat..." />
-            <button id="chat-send" type="submit">&#10148;</button>
-          </form>
-        </div>
-        <button id="chat-toggle">CHAT<span id="chat-badge">0</span></button>
-      </div>
       <div class="overlay-panel" id="pause-overlay">
         <h2>PAUSED</h2>
         <div class="key-list">Tap resume or press <b>P</b> to continue.</div>
@@ -3353,7 +3228,7 @@
           { id: 'telegram', label: 'Telegram', color: '#229ed9', icon: '\u2708' },
           { id: 'whatsapp', label: 'WhatsApp', color: '#1da851', icon: '\u260E' },
         ];
-        const ROLE_ORDER = ['user', 'vip', 'helper', 'mod', 'admin'];
+        const ROLE_ORDER = ['user', 'vip', 'helper', 'mod', 'admin', 'founder'];
         const ROLE_CODES = {
           'ORBIT-VIP': 'vip',
           'ORBIT-HELPER': 'helper',
@@ -4597,7 +4472,10 @@
             return;
           }
           let html = '<div class="um-note">Ruolo attivo: <b>' + roleLabel() + '</b></div>';
-          html += '<a class="um-btn wide" href="../admin.php" style="display:block;text-align:center;text-decoration:none;margin-bottom:8px">\u2699 PANNELLO AMMINISTRAZIONE COMPLETO</a>';
+          const adminUrl = typeof window.zeroBackendUrl === 'function'
+            ? window.zeroBackendUrl('/admin.php')
+            : '/admin.php';
+          html += '<a class="um-btn wide" href="' + adminUrl + '" style="display:block;text-align:center;text-decoration:none;margin-bottom:8px">\u2699 PANNELLO AMMINISTRAZIONE COMPLETO</a>';
           html += '<button class="um-btn wide" id="tool-hint">\u2139 HINT MINACCIA (helper)</button>';
           html += '<button class="um-btn wide gold" id="tool-power">\u25C8 TUTTI I POWER-UP (helper)</button>';
           if (hasPerm('mod')) {
