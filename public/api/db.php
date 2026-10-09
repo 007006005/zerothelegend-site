@@ -35,6 +35,40 @@ if (!function_exists('env_or_default')) {
     }
 }
 
+if (!function_exists('request_is_secure')) {
+    function request_is_secure(): bool
+    {
+        $https = $_SERVER['HTTPS'] ?? '';
+        if (is_string($https) && strcasecmp($https, 'on') === 0) {
+            return true;
+        }
+
+        if ((string)($_SERVER['SERVER_PORT'] ?? '') === '443') {
+            return true;
+        }
+
+        $forwardedProto = $_SERVER['HTTP_X_FORWARDED_PROTO'] ?? $_SERVER['HTTP_X_FORWARDED_SSL'] ?? null;
+        if (is_string($forwardedProto)) {
+            foreach (explode(',', $forwardedProto) as $candidate) {
+                $value = strtolower(trim($candidate));
+                if ($value === 'https' || $value === 'on') {
+                    return true;
+                }
+                if ($value === 'http') {
+                    return false;
+                }
+            }
+        }
+
+        $cfVisitor = $_SERVER['HTTP_CF_VISITOR'] ?? '';
+        if (is_string($cfVisitor) && str_contains($cfVisitor, '"scheme":"https"')) {
+            return true;
+        }
+
+        return false;
+    }
+}
+
 if (!defined('DB_HOST')) {
     define('DB_HOST', env_or_default('DB_HOST', '127.0.0.1'));
     define('DB_PORT', (int)env_or_default('DB_PORT', '3306'));
@@ -46,7 +80,7 @@ if (!defined('DB_HOST')) {
 if (session_status() === PHP_SESSION_NONE) {
     session_start([
         'cookie_httponly' => true,
-        'cookie_secure' => true,
+        'cookie_secure' => request_is_secure(),
         'cookie_samesite' => 'Lax',
     ]);
 }
@@ -143,6 +177,60 @@ function ensure_auth_attempts_table(): void
     $initialized = true;
 }
 
+function ensure_portal_auth_schema(): void
+{
+    $exists = db()->prepare(
+        'SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?'
+    );
+
+    try {
+        $exists->execute(['users']);
+        if ((int)$exists->fetchColumn() === 0) {
+            db()->exec(
+                'CREATE TABLE IF NOT EXISTS users (
+                    id VARCHAR(32) NOT NULL PRIMARY KEY,
+                    username VARCHAR(20) NOT NULL,
+                    email VARCHAR(190) NOT NULL,
+                    password_hash VARCHAR(255) NOT NULL,
+                    role VARCHAR(20) NOT NULL DEFAULT \'user\',
+                    coins INT UNSIGNED NOT NULL DEFAULT 500,
+                    gems INT UNSIGNED NOT NULL DEFAULT 15,
+                    xp INT UNSIGNED NOT NULL DEFAULT 0,
+                    level INT UNSIGNED NOT NULL DEFAULT 1,
+                    clan VARCHAR(8) NOT NULL DEFAULT \'ZERO\',
+                    profile_json MEDIUMTEXT NULL,
+                    is_banned TINYINT(1) NOT NULL DEFAULT 0,
+                    ban_reason VARCHAR(255) NULL,
+                    daily_streak INT UNSIGNED NOT NULL DEFAULT 0,
+                    last_login DATETIME NULL,
+                    last_seen DATETIME NULL,
+                    last_daily DATE NULL,
+                    created_at DATETIME NOT NULL,
+                    UNIQUE KEY uq_users_username (username),
+                    UNIQUE KEY uq_users_email (email)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci'
+            );
+        }
+
+        $exists->execute(['user_state']);
+        if ((int)$exists->fetchColumn() === 0) {
+            db()->exec(
+                'CREATE TABLE IF NOT EXISTS user_state (
+                    user_id VARCHAR(32) NOT NULL PRIMARY KEY,
+                    state_json LONGTEXT NOT NULL,
+                    updated_at DATETIME NOT NULL
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci'
+            );
+        }
+    } catch (PDOException $error) {
+        error_log('Unable to initialize portal auth schema: ' . $error->getMessage());
+        json_response([
+            'success' => false,
+            'error' => 'Database non pronto: impossibile inizializzare le tabelle utenti. Verifica i permessi CREATE del database Railway.',
+        ], 500);
+    }
+}
+
 function rate_limited(string $kind, string $ident, int $limit, int $windowSeconds): bool
 {
     ensure_auth_attempts_table();
@@ -210,7 +298,8 @@ function insert_row(string $table, array $values): void
 
 function user_hash(array $user): string
 {
-    return (string)($user['password_hash'] ?? $user['password'] ?? '');
+    $passwordHash = (string)($user['password_hash'] ?? '');
+    return $passwordHash !== '' ? $passwordHash : (string)($user['password'] ?? '');
 }
 
 function login_session(string $userId): void

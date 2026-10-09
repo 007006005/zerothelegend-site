@@ -7,6 +7,216 @@ $in = read_json_post();
 if (!empty($in['action'])) $action = (string)$in['action'];
 $pdo = db();
 
+function ensure_social_schema(PDO $pdo): void {
+    static $initialized = false;
+    if ($initialized) return;
+
+    $tables = [
+        "CREATE TABLE IF NOT EXISTS social_posts (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+            user_id VARCHAR(32) NOT NULL,
+            type VARCHAR(30) NOT NULL DEFAULT 'post',
+            body TEXT NOT NULL,
+            media_url TEXT NULL,
+            link_url TEXT NULL,
+            visibility VARCHAR(20) NOT NULL DEFAULT 'public',
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            deleted_at DATETIME NULL,
+            KEY idx_social_posts_feed (deleted_at, visibility, created_at),
+            KEY idx_social_posts_user (user_id, created_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+        "CREATE TABLE IF NOT EXISTS social_reactions (
+            post_id BIGINT UNSIGNED NOT NULL,
+            user_id VARCHAR(32) NOT NULL,
+            reaction VARCHAR(20) NOT NULL,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (post_id, user_id),
+            KEY idx_social_reactions_user (user_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+        "CREATE TABLE IF NOT EXISTS social_comments (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+            post_id BIGINT UNSIGNED NOT NULL,
+            user_id VARCHAR(32) NOT NULL,
+            body VARCHAR(1000) NOT NULL,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            KEY idx_social_comments_post (post_id, id),
+            KEY idx_social_comments_user (user_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+        "CREATE TABLE IF NOT EXISTS social_shares (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+            post_id BIGINT UNSIGNED NOT NULL,
+            user_id VARCHAR(32) NOT NULL,
+            body VARCHAR(500) NOT NULL DEFAULT '',
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            KEY idx_social_shares_post (post_id),
+            KEY idx_social_shares_user (user_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+        "CREATE TABLE IF NOT EXISTS social_saved (
+            user_id VARCHAR(32) NOT NULL,
+            post_id BIGINT UNSIGNED NOT NULL,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (user_id, post_id),
+            KEY idx_social_saved_post (post_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+        "CREATE TABLE IF NOT EXISTS social_stories (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+            user_id VARCHAR(32) NOT NULL,
+            body VARCHAR(1000) NOT NULL,
+            media_url TEXT NULL,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            expires_at DATETIME NOT NULL,
+            KEY idx_social_stories_expiration (expires_at, created_at),
+            KEY idx_social_stories_user (user_id, created_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+        "CREATE TABLE IF NOT EXISTS social_story_views (
+            story_id BIGINT UNSIGNED NOT NULL,
+            user_id VARCHAR(32) NOT NULL,
+            viewed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (story_id, user_id),
+            KEY idx_social_story_views_user (user_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+        "CREATE TABLE IF NOT EXISTS social_groups (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+            owner_id VARCHAR(32) NOT NULL,
+            name VARCHAR(120) NOT NULL,
+            description TEXT NOT NULL,
+            privacy VARCHAR(16) NOT NULL DEFAULT 'public',
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            KEY idx_social_groups_created (created_at),
+            KEY idx_social_groups_name (name)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+        "CREATE TABLE IF NOT EXISTS social_group_members (
+            group_id BIGINT UNSIGNED NOT NULL,
+            user_id VARCHAR(32) NOT NULL,
+            role VARCHAR(20) NOT NULL DEFAULT 'member',
+            joined_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (group_id, user_id),
+            KEY idx_social_group_members_user (user_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+        "CREATE TABLE IF NOT EXISTS social_pages (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+            owner_id VARCHAR(32) NOT NULL,
+            name VARCHAR(120) NOT NULL,
+            category VARCHAR(80) NOT NULL DEFAULT 'Community',
+            description TEXT NOT NULL,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            KEY idx_social_pages_created (created_at),
+            KEY idx_social_pages_name (name)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+        "CREATE TABLE IF NOT EXISTS social_page_followers (
+            page_id BIGINT UNSIGNED NOT NULL,
+            user_id VARCHAR(32) NOT NULL,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (page_id, user_id),
+            KEY idx_social_page_followers_user (user_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+        "CREATE TABLE IF NOT EXISTS social_events (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+            owner_id VARCHAR(32) NOT NULL,
+            title VARCHAR(180) NOT NULL,
+            description TEXT NOT NULL,
+            location VARCHAR(255) NOT NULL DEFAULT '',
+            starts_at DATETIME NOT NULL,
+            ends_at DATETIME NULL,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            KEY idx_social_events_start (starts_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+        "CREATE TABLE IF NOT EXISTS social_event_attendees (
+            event_id BIGINT UNSIGNED NOT NULL,
+            user_id VARCHAR(32) NOT NULL,
+            status VARCHAR(16) NOT NULL DEFAULT 'interested',
+            updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (event_id, user_id),
+            KEY idx_social_event_attendees_status (event_id, status)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+        "CREATE TABLE IF NOT EXISTS social_marketplace (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+            seller_id VARCHAR(32) NOT NULL,
+            title VARCHAR(180) NOT NULL,
+            description TEXT NOT NULL,
+            price DECIMAL(12,2) NOT NULL DEFAULT 0,
+            location VARCHAR(180) NOT NULL DEFAULT '',
+            status VARCHAR(20) NOT NULL DEFAULT 'active',
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            KEY idx_social_marketplace_active (status, created_at),
+            KEY idx_social_marketplace_seller (seller_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+        "CREATE TABLE IF NOT EXISTS social_notifications (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+            user_id VARCHAR(32) NOT NULL,
+            actor_id VARCHAR(32) NULL,
+            type VARCHAR(40) NOT NULL,
+            entity_id VARCHAR(48) NULL,
+            payload_json TEXT NOT NULL,
+            is_read TINYINT(1) NOT NULL DEFAULT 0,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            KEY idx_social_notifications_user (user_id, id),
+            KEY idx_social_notifications_actor (actor_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+        "CREATE TABLE IF NOT EXISTS social_friends (
+            user_a VARCHAR(32) NOT NULL,
+            user_b VARCHAR(32) NOT NULL,
+            status VARCHAR(16) NOT NULL DEFAULT 'pending',
+            requested_by VARCHAR(32) NOT NULL,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (user_a, user_b),
+            KEY idx_social_friends_user_b (user_b, updated_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+        "CREATE TABLE IF NOT EXISTS social_messages (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+            thread_key VARCHAR(100) NOT NULL,
+            sender_id VARCHAR(32) NOT NULL,
+            recipient_id VARCHAR(32) NOT NULL,
+            body VARCHAR(4000) NOT NULL,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            read_at DATETIME NULL,
+            KEY idx_social_messages_thread (thread_key, id),
+            KEY idx_social_messages_sender (sender_id, id),
+            KEY idx_social_messages_recipient (recipient_id, id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+        "CREATE TABLE IF NOT EXISTS social_blocks (
+            user_id VARCHAR(32) NOT NULL,
+            blocked_id VARCHAR(32) NOT NULL,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (user_id, blocked_id),
+            KEY idx_social_blocks_blocked (blocked_id, user_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+        "CREATE TABLE IF NOT EXISTS social_follows (
+            follower_id VARCHAR(32) NOT NULL,
+            target_type VARCHAR(16) NOT NULL,
+            target_id VARCHAR(48) NOT NULL,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (follower_id, target_type, target_id),
+            KEY idx_social_follows_target (target_type, target_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+        "CREATE TABLE IF NOT EXISTS social_reports (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+            reporter_id VARCHAR(32) NOT NULL,
+            target_type VARCHAR(30) NOT NULL,
+            target_id VARCHAR(48) NOT NULL,
+            reason VARCHAR(1000) NOT NULL,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            KEY idx_social_reports_reporter (reporter_id, created_at),
+            KEY idx_social_reports_target (target_type, target_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+    ];
+
+    try {
+        foreach ($tables as $sql) $pdo->exec($sql);
+    } catch (PDOException $error) {
+        error_log('Unable to initialize social schema: ' . $error->getMessage());
+        json_response([
+            'ok' => false,
+            'error' => 'Database non pronto: impossibile inizializzare le tabelle Social. Verifica i permessi CREATE del database Railway.',
+        ], 500);
+    }
+
+    $initialized = true;
+}
+
+ensure_social_schema($pdo);
+
 function social_public_user(array $u): array {
     return [
         'id'=>(string)$u['id'], 'name'=>(string)$u['username'], 'username'=>(string)$u['username'],

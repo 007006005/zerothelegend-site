@@ -21,6 +21,7 @@ $pdo = db();
 $userColumns = [];
 if (in_array($action, ['register', 'login'], true)) {
     try {
+        ensure_portal_auth_schema();
         $userColumns = table_columns('users');
     } catch (PDOException $e) {
         error_log('auth schema check: ' . $e->getMessage());
@@ -67,31 +68,32 @@ if ($action === 'register') {
         json_response(['success' => false, 'error' => 'Troppe registrazioni da questo indirizzo. Riprova più tardi.'], 429);
     }
 
-    $chk = $pdo->prepare('SELECT username, email FROM users WHERE username = ? OR email = ? LIMIT 1');
-    $chk->execute([$username, $email]);
-    if ($row = $chk->fetch()) {
-        $msg = (strcasecmp((string)$row['username'], $username) === 0) ? 'Username già in uso.' : 'Email già registrata.';
-        json_response(['success' => false, 'error' => $msg], 409);
-    }
-
-    // Il ruolo staff NON dipende dall'username: solo il primissimo account del portale diventa founder.
-    // Altri amministratori si nominano con install.php (protetto da INSTALL_KEY) o dal pannello admin.
-    $isFirst = ((int)$pdo->query('SELECT COUNT(*) FROM users')->fetchColumn() === 0);
-    $id   = 'usr_' . bin2hex(random_bytes(6));
-    $hash = password_hash($password, PASSWORD_DEFAULT);
-    $now  = date('Y-m-d H:i:s');
-    $vals = [
-        'id' => $id, 'username' => $username, 'email' => $email,
-        'password_hash' => $hash,
-        'role' => $isFirst ? 'founder' : 'user',
-        'coins' => 500, 'gems' => 15, 'xp' => 0, 'level' => 1, 'clan' => 'ZERO',
-        'profile_json' => json_encode(['avatar' => '😎', 'bio' => '', 'unlocked_skins' => ['default'], 'equipped_skin' => 'default'], JSON_UNESCAPED_UNICODE),
-        'is_banned' => 0, 'daily_streak' => 0,
-        'last_login' => $now, 'last_seen' => $now, 'created_at' => $now,
-    ];
-    if (isset($userColumns['password'])) $vals['password'] = $hash;
-
+    record_attempt('register', '');
     try {
+        $chk = $pdo->prepare('SELECT username, email FROM users WHERE username = ? OR email = ? LIMIT 1');
+        $chk->execute([$username, $email]);
+        if ($row = $chk->fetch()) {
+            $msg = (strcasecmp((string)$row['username'], $username) === 0) ? 'Username già in uso.' : 'Email già registrata.';
+            json_response(['success' => false, 'error' => $msg], 409);
+        }
+
+        // Il ruolo staff NON dipende dall'username: solo il primissimo account del portale diventa founder.
+        // Altri amministratori si nominano con install.php (protetto da INSTALL_KEY) o dal pannello admin.
+        $isFirst = ((int)$pdo->query('SELECT COUNT(*) FROM users')->fetchColumn() === 0);
+        $id   = 'usr_' . bin2hex(random_bytes(6));
+        $hash = password_hash($password, PASSWORD_DEFAULT);
+        $now  = date('Y-m-d H:i:s');
+        $vals = [
+            'id' => $id, 'username' => $username, 'email' => $email,
+            'password_hash' => $hash,
+            'role' => $isFirst ? 'founder' : 'user',
+            'coins' => 500, 'gems' => 15, 'xp' => 0, 'level' => 1, 'clan' => 'ZERO',
+            'profile_json' => json_encode(['avatar' => '😎', 'bio' => '', 'unlocked_skins' => ['default'], 'equipped_skin' => 'default'], JSON_UNESCAPED_UNICODE),
+            'is_banned' => 0, 'daily_streak' => 0,
+            'last_login' => $now, 'last_seen' => $now, 'created_at' => $now,
+        ];
+        if (isset($userColumns['password'])) $vals['password'] = $hash;
+
         insert_row('users', $vals);
     } catch (PDOException $e) {
         if ($e->getCode() === '23000') {
@@ -100,7 +102,6 @@ if ($action === 'register') {
         error_log('register: ' . $e->getMessage());
         json_response(['success' => false, 'error' => 'Errore durante la registrazione.'], 500);
     }
-    record_attempt('register', '');
 
     login_session($id);
     $u = current_user(true);
