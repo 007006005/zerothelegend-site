@@ -4,7 +4,7 @@
 
 - Upload the portal frontend to the IONOS FTP document root serving `www.zerothelegend.com`.
 - Use `https://games.zerothelegend.com` for browser games and APIs. Attach this domain to Railway and configure only its DNS target shown by Railway in IONOS. Leave `api.zerothelegend.com` on its current IONOS Nextcloud service.
-- The Railway public domain supplied for the service is `agar10-production.up.railway.app`. The service currently returns HTTP 502 (`Application failed to respond`); fix the Railway deployment before switching the custom-domain DNS or testing authentication.
+- The Railway public domain supplied for the service is `agar10-production.up.railway.app`. The same service runs the PHP APIs and the Agar WebSocket server: Apache serves HTTP on Railway's `PORT`, while WebSocket upgrade requests are proxied internally to Node.js on port `3001`.
 
 The DNS destinations are assigned by Railway and must be copied from its custom-domain settings; do not guess CNAME targets.
 
@@ -12,7 +12,7 @@ The DNS destinations are assigned by Railway and must be copied from its custom-
 
 1. Push the whole `tttt` project to a GitHub repository (or connect the repository that contains this `tttt` folder) and create a Railway project from it.
 2. Set the Railway service root directory to `/tttt` if the Git repository root is its parent folder; leave it at `/` if `tttt` itself is the Git repository root. Railway must see `Dockerfile` and `railway.json` together at the selected root.
-3. Deploy the service. The Docker image serves the PHP application from `public/`.
+3. Deploy the service. The Docker image serves the PHP application from `public/`, installs the Agar Node.js dependencies, starts both services under Supervisor, and proxies WebSocket upgrades to the Agar game server.
 
 The PHP API must detect HTTPS behind Railway's reverse proxy before setting secure session cookies; otherwise auth sessions can fail after the app is reached through the generated domain.
 
@@ -40,6 +40,8 @@ Keep `.env` local and out of Git. Configure environment variables in Railway's s
 
 The active API bootstrap provides the shared database, session, authentication, and JSON helpers used by the login and profile endpoints. Both the portal and the standalone `games/growth_orbit.php` account form use `/api/auth.php`, so registrations and logins are stored in the Railway `users` table rather than only in browser storage. On the first registration or login request, the API creates the `users` and `user_state` tables only when they are missing; the login rate limiter similarly creates `auth_attempts`. The Social API creates its `social_*` tables on first use if they are missing. The Railway database user therefore needs permission to create these tables on a new database. Existing tables are never altered automatically: an incompatible existing schema must be migrated after taking a database backup. Verify registration, login, account-name display, refresh/session restoration, and logout against the production database.
 
+Growth Orbit joins the same `ZeroArcade:global` arena and persistent chat used by ZeroAgar Classic. Multiplayer requires a valid Railway account session; the game page polls `api/arena_live.php` for player positions and shared chat. After deploying, sign in with two accounts in separate browser sessions, open Growth Orbit in both, and verify that both players appear in the same arena and see each other's chat messages. Also test one Growth Orbit session alongside ZeroAgar Classic to verify the shared arena. These checks require the Railway MySQL service to be available and its database user to have permission to create the arena tables on first use.
+
 ## FTP
 
 In IONOS, open the FTP access details for the hosting package assigned to `www.zerothelegend.com`, connect with an FTP client (for example FileZilla), and open the document root shown in the IONOS hosting panel (often `htdocs`, but use the path IONOS displays). Copy these local items from `tttt/public/` to that document root, preserving the folder structure:
@@ -53,6 +55,8 @@ Do **not** upload `api/`, `games/`, `.env`, `.git`, `Dockerfile`, `railway.json`
 
 The portal loads `assets/js/deployment.js`, which sends API requests and game links to `games.zerothelegend.com`, and `assets/js/auto-locale.js` for automatic localization. Keep both files on the FTP site. On every page load and when the page is shown, gains focus, or reconnects to the network (with a 30-second request limit), automatic localization queries `ipapi.co` again so a changed public IP/network can select a new language. The provider receives the visitor's IP; the site does not store the IP, country, or selected language. If GeoIP lookup fails, the browser language is used. Only languages already supported by the portal's dictionaries are selected; this does not translate unsupported content.
 
+The full administration panel must be opened on the Railway backend domain (`https://games.zerothelegend.com/admin.php`), not the IONOS frontend domain. The portal's staff link points to Railway so the panel and its API use the same database-backed PHP session.
+
 ## Before switching DNS
 
 1. Deploy the Railway service and set all required variables.
@@ -61,6 +65,7 @@ The portal loads `assets/js/deployment.js`, which sends API requests and game li
 4. Confirm the FTP site loads over HTTPS and the two frontend scripts return successfully. Test GeoIP localization and gameplay.
 5. Open `https://agar10-production.up.railway.app/api/auth.php?action=me`; it must return JSON, not HTTP 502. Check Railway deployment logs, service root directory, and startup/port configuration if the service does not respond.
 6. After Railway responds, open `https://games.zerothelegend.com/api/auth.php?action=me`; it must return JSON, not an IONOS placeholder page. If it returns HTML, the `games` DNS record is not connected to the Railway service yet.
-7. Verify login, registration, account-name display, profile persistence, and logout against Railway. Verify score saving and Agar login separately before announcing those flows ready.
+7. Open `https://games.zerothelegend.com/games/agar/`, start a game, and confirm the browser WebSocket handshake is `101 Switching Protocols` rather than a redirect. Check the Railway logs for `ZeroAgar Server running on port 3001` if the socket does not connect.
+8. Verify login, registration, account-name display, profile persistence, and logout against Railway. Verify score saving and Agar login separately before announcing those flows ready.
 
 If Facebook login is enabled, add `https://games.zerothelegend.com/api/fb_callback.php` as the OAuth redirect URI in the Facebook app settings.
