@@ -3080,7 +3080,7 @@
             nickname: 'Nickname', register: 'REGISTRATI', login: 'ACCEDI', logout: 'ESCI',
             loggedAs: 'Connesso come', via: 'via', role: 'Ruolo', level: 'Livello',
             bestMass: 'Massa record', runs: 'Partite', resetSettings: 'RIPRISTINA IMPOSTAZIONI',
-            accountNote: 'Crea un profilo locale per salvare progressi, skin e impostazioni. Nickname + PIN a 4 cifre.',
+            accountNote: 'Crea un account Zero World condiviso con il portale. Nickname + PIN a 4-6 cifre.',
             providerNote: 'Collega un profilo social (collegamento locale: nessun dato viene inviato fuori dal gioco).',
             uploadNote: 'Carica una skin: PNG, JPG, WEBP, GIF animata, SVG, BMP, AVIF. Il file resta nel tuo dispositivo.',
             drop: 'Tocca o trascina qui un file immagine / GIF',
@@ -3095,7 +3095,7 @@
             nickname: 'Nickname', register: 'REGISTER', login: 'LOG IN', logout: 'LOG OUT',
             loggedAs: 'Logged in as', via: 'via', role: 'Role', level: 'Level',
             bestMass: 'Best mass', runs: 'Runs', resetSettings: 'RESET SETTINGS',
-            accountNote: 'Create a local profile to keep progress, skins and settings. Nickname + 4-digit PIN.',
+            accountNote: 'Create a Zero World account shared with the portal. Nickname + 4-6 digit PIN.',
             providerNote: 'Link a social profile (local link only: nothing leaves the game).',
             uploadNote: 'Upload a skin: PNG, JPG, WEBP, animated GIF, SVG, BMP, AVIF. The file stays on your device.',
             drop: 'Tap or drop an image / GIF here',
@@ -3465,44 +3465,99 @@
         function randomTag() {
           return String(1000 + Math.floor(Math.random() * 9000));
         }
-        function registerAccount(name, pin) {
+        const ZA_AUTH_API = '/api/auth.php';
+        async function zaAuthRequest(action, payload = {}) {
+          const response = await fetch(ZA_AUTH_API, {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+            body: JSON.stringify(Object.assign({ action }, payload || {})),
+            cache: 'no-store'
+          });
+          const responseBody = await response.text();
+          let data = null;
+          try { data = JSON.parse(responseBody); } catch (_) {}
+          if (!response.ok || !data || data.success !== true) {
+            throw new Error((data && data.error) || ('HTTP ' + response.status));
+          }
+          return data;
+        }
+        function applyServerUser(user) {
+          if (!user || !user.id) return false;
+          const savedProfile = user.profile && typeof user.profile === 'object' ? user.profile : {};
+          profile = Object.assign(defaultProfile(), profile, savedProfile, {
+            id: user.id,
+            name: user.username || 'Guest',
+            email: user.email || '',
+            role: user.role || 'user',
+            coins: Number(user.coins) || 0,
+            gems: Number(user.gems) || 0,
+            xp: Number(user.xp) || 0,
+            level: Number(user.level) || 1,
+            clan: user.clan || 'ZERO',
+            loggedIn: true,
+            provider: 'server',
+            serverAuth: true
+          });
+          delete profile.pin;
+          S = Object.assign(defaultSettings(), profile.settings || {});
+          profile.settings = S;
+          return true;
+        }
+        async function registerAccount(name, pin) {
           const n = sanitizeName(name);
           const p = String(pin || '').trim();
-          if (n.length < 2) { notify('\u26A0 Inserisci un nickname di almeno 2 caratteri', '#ff5c7a'); return false; }
+          if (!/^[A-Za-z0-9_]{3,20}$/.test(n)) { notify('\u26A0 Username: 3-20 caratteri tra lettere, numeri e underscore', '#ff5c7a'); return false; }
           if (!/^\d{4,6}$/.test(p)) { notify('\u26A0 Il PIN deve contenere 4-6 cifre', '#ff5c7a'); return false; }
-          profile.name = n;
-          profile.pin = p;
-          profile.provider = 'local';
-          profile.loggedIn = true;
-          if (!profile.role) profile.role = 'user';
-          notify('\u2714 Account Zero World creato: ' + n, '#00ffa2');
-          unlock('account', 'Account creato!');
-          finishAuth();
-          openPortal('home');
-          return true;
+          try {
+            const result = await zaAuthRequest('register', {
+              username: n,
+              password: p,
+              confirm_password: p
+            });
+            if (!applyServerUser(result.user)) throw new Error('Utente non restituito dal server');
+            notify('\u2714 Account Zero World creato: ' + n, '#00ffa2');
+            unlock('account', 'Account creato!');
+            finishAuth();
+            openPortal('home');
+            return true;
+          } catch (error) {
+            notify('\u26A0 Registrazione non riuscita: ' + error.message, '#ff5c7a');
+            return false;
+          }
         }
-        function loginAccount(name, pin) {
+        async function loginAccount(name, pin) {
           const n = sanitizeName(name);
           const p = String(pin || '').trim();
-          if (!profile.name || profile.name === 'Guest' || !profile.pin) {
-            notify('\u26A0 Nessun account locale trovato: usa REGISTRATI', '#ff5c7a');
+          if (!/^[A-Za-z0-9_]{3,20}$/.test(n) || !/^\d{4,6}$/.test(p)) {
+            notify('\u26A0 Inserisci username valido e PIN di 4-6 cifre', '#ff5c7a');
             return false;
           }
-          if (n.toLowerCase() !== profile.name.toLowerCase() || p !== profile.pin) {
-            notify('\u26A0 Nickname o PIN errati', '#ff5c7a');
+          try {
+            const result = await zaAuthRequest('login', { username: n, password: p });
+            if (!applyServerUser(result.user)) throw new Error('Utente non restituito dal server');
+            notify('\u2714 Bentornato ' + profile.name, '#00ffa2');
+            finishAuth();
+            openPortal('home');
+            return true;
+          } catch (error) {
+            notify('\u26A0 Accesso negato: ' + error.message, '#ff5c7a');
             return false;
           }
-          profile.loggedIn = true;
-          notify('\u2714 Bentornato ' + profile.name, '#00ffa2');
-          finishAuth();
-          openPortal('home');
-          return true;
         }
-        function logoutAccount() {
+        async function logoutAccount() {
+          try { await zaAuthRequest('logout'); } catch (error) {
+            notify('\u26A0 Logout server non riuscito: ' + error.message, '#ff5c7a');
+            return false;
+          }
           profile.loggedIn = false;
+          profile.serverAuth = false;
+          profile.provider = 'local';
+          delete profile.pin;
           notify('Disconnesso dal portale', '#7fd4ff');
           finishAuth();
           openPortal('home');
+          return true;
         }
         function linkProvider(id) {
           const p = PROVIDERS.find((x) => x.id === id);
@@ -3556,6 +3611,7 @@
         async function saveProfile() {
           try {
             const toSave = Object.assign({}, profile);
+            delete toSave.pin;
             if (toSave.skin && typeof toSave.skin === 'string' && toSave.skin.length > 200000) {
               toSave.skin = null;
               toSave.skinKind = null;
@@ -3571,16 +3627,34 @@
 
         async function loadProfile() {
           try {
+            const response = await fetch(ZA_AUTH_API + '?action=me', {
+              credentials: 'include',
+              headers: { 'Accept': 'application/json' },
+              cache: 'no-store'
+            });
+            const data = await response.json();
+            if (response.ok && data && data.success && data.user) {
+              applyServerUser(data.user);
+              return true;
+            }
+          } catch (error) {
+            console.warn('[Zero World] Server session check failed:', error);
+          }
+
+          try {
             const raw = localStorage.getItem('ZeroArcade_portal_profile_v2');
             if (raw) {
               const loaded = JSON.parse(raw);
               if (loaded && typeof loaded === 'object' && loaded.name && loaded.loggedIn) {
                 profile = Object.assign(defaultProfile(), loaded);
                 profile.settings = Object.assign(defaultSettings(), loaded.settings || {});
-                profile.loggedIn = true;
+                profile.loggedIn = false;
+                profile.serverAuth = false;
+                profile.provider = 'local';
+                delete profile.pin;
                 profile.role = loaded.role || 'user';
                 S = profile.settings;
-                return true;
+                return false;
               }
             }
           } catch (_) {}
@@ -8812,8 +8886,17 @@
               const name = document.getElementById('za-auth-name').value;
               const pin = document.getElementById('za-auth-pin').value;
               msg.textContent = '';
-              const ok = authMode === 'login' ? loginAccount(name, pin) : registerAccount(name, pin);
-              if (!ok) msg.textContent = authMode === 'login' ? 'Credenziali non valide o account non ancora registrato.' : 'Controlla nickname e PIN.';
+              const mode = authMode;
+              (async () => {
+                const ok = mode === 'login'
+                  ? await loginAccount(name, pin)
+                  : await registerAccount(name, pin);
+                if (!ok) msg.textContent = mode === 'login'
+                  ? 'Accesso non riuscito. Controlla i dati o riprova più tardi.'
+                  : 'Registrazione non riuscita. Controlla i dati o riprova più tardi.';
+              })().catch((error) => {
+                msg.textContent = error.message || 'Richiesta di autenticazione non riuscita.';
+              });
             });
             return;
           }
