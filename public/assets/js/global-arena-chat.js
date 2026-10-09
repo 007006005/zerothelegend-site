@@ -12,7 +12,7 @@
 
     const style = document.createElement('style');
     style.textContent = `
-      #za-global-chat{position:fixed;left:12px;bottom:12px;z-index:20000;width:min(320px,calc(100vw - 24px));font:13px Arial,Helvetica,sans-serif;color:#eff8ff}
+      #za-global-chat{position:fixed!important;left:12px!important;right:auto!important;bottom:12px!important;z-index:20000;width:min(320px,calc(100vw - 24px));font:13px Arial,Helvetica,sans-serif;color:#eff8ff}
       #za-global-chat *{box-sizing:border-box}
       #za-global-chat-panel{display:none;margin-bottom:8px;overflow:hidden;border:1px solid rgba(0,240,255,.45);border-radius:10px;background:rgba(8,16,30,.96);box-shadow:0 8px 28px rgba(0,0,0,.45)}
       #za-global-chat.open #za-global-chat-panel{display:block}
@@ -28,7 +28,7 @@
       #za-global-chat-form button{padding:8px 11px;border:0;background:#08bde8;color:#06131b;font-weight:700;cursor:pointer}
       #za-global-chat-toggle{min-width:108px;padding:11px 15px;border:1px solid rgba(0,240,255,.7);border-radius:10px;background:rgba(8,16,30,.94);color:#8ff9ff;font-weight:700;cursor:pointer;box-shadow:0 4px 16px rgba(0,0,0,.35)}
       #za-global-chat-toggle:hover,#za-global-chat-close:hover{filter:brightness(1.2)}
-      @media(max-width:520px){#za-global-chat{left:8px;bottom:8px;width:min(290px,calc(100vw - 16px))}#za-global-chat-messages{height:140px}}
+      @media(max-width:520px){#za-global-chat{left:8px!important;right:auto!important;bottom:8px!important;width:min(290px,calc(100vw - 16px))}#za-global-chat-messages{height:140px}}
       #arenaChat,#go-live-chat,#chat-panel{display:none!important}
     `;
     document.head.appendChild(style);
