@@ -117,6 +117,12 @@ function db(): PDO
     return $pdo;
 }
 
+function touch_presence(string $userId): void
+{
+    $statement = db()->prepare('UPDATE users SET last_seen = NOW() WHERE id = ?');
+    $statement->execute([$userId]);
+}
+
 function read_json_post(): array
 {
     $raw = file_get_contents('php://input');
@@ -399,4 +405,83 @@ function require_login_api(): array
     }
 
     return $user;
+}
+
+if (!defined('ARCADE_ROLES')) {
+    define('ARCADE_ROLES', ['user', 'vip', 'helper', 'mod', 'admin', 'founder']);
+}
+
+function role_rank(string $role): int
+{
+    $normalized = strtolower(trim($role));
+    if ($normalized === 'moderatore') {
+        $normalized = 'mod';
+    }
+
+    $rank = array_search($normalized, ARCADE_ROLES, true);
+    return $rank === false ? 0 : $rank;
+}
+
+function require_login_page(string $redirectTo = '/'): array
+{
+    $user = current_user(true);
+    if ($user !== null) {
+        return $user;
+    }
+
+    if (!preg_match('/^[A-Za-z0-9_./?=&%-]+$/', $redirectTo)) {
+        $redirectTo = '/';
+    }
+
+    header('Location: ' . $redirectTo);
+    exit;
+}
+
+function require_staff_api(string $minimumRole = 'mod'): array
+{
+    $user = require_login_api();
+    if (role_rank((string)($user['role'] ?? 'user')) < role_rank($minimumRole)) {
+        json_response(['success' => false, 'error' => 'Accesso riservato allo staff.'], 403);
+    }
+
+    return $user;
+}
+
+function esc(string $value): string
+{
+    return htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+}
+
+function audit(array $admin, string $action, string $target = '', string $details = ''): void
+{
+    static $initialized = false;
+    $pdo = db();
+
+    if (!$initialized) {
+        $pdo->exec(
+            'CREATE TABLE IF NOT EXISTS admin_audit (
+                id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+                admin_id VARCHAR(32) NOT NULL,
+                admin_name VARCHAR(80) NOT NULL,
+                action VARCHAR(80) NOT NULL,
+                target VARCHAR(190) NOT NULL DEFAULT \'\',
+                details TEXT NOT NULL,
+                created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                KEY idx_admin_audit_created (created_at),
+                KEY idx_admin_audit_admin (admin_id, created_at)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci'
+        );
+        $initialized = true;
+    }
+
+    $pdo->prepare(
+        'INSERT INTO admin_audit (admin_id, admin_name, action, target, details, created_at)
+         VALUES (?, ?, ?, ?, ?, NOW())'
+    )->execute([
+        (string)($admin['id'] ?? ''),
+        (string)($admin['username'] ?? 'staff'),
+        $action,
+        $target,
+        $details,
+    ]);
 }
