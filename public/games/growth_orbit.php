@@ -5289,6 +5289,22 @@
         let aiCells = [];
         let gameOver = false;
         let lbTimer = 0;
+        const ARENA_API = '/api/arena_live.php';
+        const SHARED_ARENA = 'ZeroArcade:global';
+        const SHARED_ARENA_SIZE = 6000;
+        let arenaJoined = false;
+        let arenaJoinBusy = false;
+        let arenaUpdateBusy = false;
+        let arenaSyncBusy = false;
+        let arenaSyncTimer = null;
+        let arenaUpdateTimer = null;
+        let arenaChatSince = 0;
+        let arenaFailureReported = false;
+        let remotePlayers = {};
+        let arenaChatBody = null;
+        let arenaChatInput = null;
+        let arenaOnlineCount = null;
+        let arenaStatus = null;
         const AI_COLORS = ['#ff2d95', '#ff3b3b', '#ff6ec7', '#d400ff', '#ff7a18', '#ff1744'];
         const AI_NAMES = [
           'Vortex', 'Nebula', 'Krill', 'Hydra', 'Zenith', 'Mitosis', 'Quark',
@@ -5320,6 +5336,234 @@
         let lastTime = 0;
         let globalTime = 0;
         let growthPulse = 0; // Decaying pulse factor when absorbing
+
+        function arenaCoordinates(value) {
+          const half = (Number(cfg.arena.size) || 3600) / 2;
+          return (Number(value) + half) * (SHARED_ARENA_SIZE / (half * 2));
+        }
+
+        function localCoordinates(value) {
+          const half = (Number(cfg.arena.size) || 3600) / 2;
+          return (Number(value) / SHARED_ARENA_SIZE) * (half * 2) - half;
+        }
+
+        async function arenaCall(action, payload = {}) {
+          const response = await fetch(ARENA_API, {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+            body: JSON.stringify(Object.assign({ action, arena: SHARED_ARENA }, payload)),
+            cache: 'no-store'
+          });
+          const text = await response.text();
+          let data = null;
+          try { data = JSON.parse(text); } catch (_) {}
+          if (!response.ok || !data || data.success !== true) {
+            throw new Error((data && data.error) || ('Arena HTTP ' + response.status));
+          }
+          return data;
+        }
+
+        function setupArenaChat() {
+          if (arenaChatBody) return;
+          const style = document.createElement('style');
+          style.textContent = '#go-live-chat{position:fixed;right:14px;bottom:14px;width:min(340px,calc(100vw - 28px));z-index:10000;font:13px Arial,sans-serif;color:#eef7ff;background:rgba(10,18,32,.94);border:1px solid rgba(0,240,255,.45);border-radius:10px;box-shadow:0 8px 30px #0008}#go-live-chat header{padding:9px 11px;background:#14253a;border-radius:9px 9px 0 0;font-weight:700;display:flex;justify-content:space-between}#go-live-chat-body{height:150px;overflow:auto;padding:8px}#go-live-chat-body div{margin:4px 0;overflow-wrap:anywhere}#go-live-chat-body b{color:#54dcff}#go-live-chat-status{font-size:11px;opacity:.75;padding:0 8px 6px}#go-live-chat form{display:flex;border-top:1px solid #304156}#go-live-chat input{flex:1;min-width:0;padding:9px;border:0;background:#101b2a;color:#fff;border-radius:0 0 0 9px;outline:none}#go-live-chat button{padding:8px 12px;border:0;background:#08bde8;color:#06131b;font-weight:700;border-radius:0 0 9px 0}@media(max-width:600px){#go-live-chat{bottom:8px;right:8px;width:min(300px,calc(100vw - 16px))}#go-live-chat-body{height:110px}}';
+          document.head.appendChild(style);
+          const panel = document.createElement('section');
+          panel.id = 'go-live-chat';
+          panel.innerHTML = '<header><span>CHAT ARENA GLOBALE</span><span id="go-live-online">0 online</span></header><div id="go-live-chat-body"></div><div id="go-live-chat-status">Accesso richiesto per giocare online</div><form><input maxlength="200" autocomplete="off" placeholder="Scrivi a tutti i giocatori"><button type="submit">INVIA</button></form>';
+          document.body.appendChild(panel);
+          arenaChatBody = panel.querySelector('#go-live-chat-body');
+          arenaChatInput = panel.querySelector('input');
+          arenaOnlineCount = panel.querySelector('#go-live-online');
+          arenaStatus = panel.querySelector('#go-live-chat-status');
+          arenaChatInput.disabled = true;
+          panel.querySelector('form').addEventListener('submit', async (event) => {
+            event.preventDefault();
+            const text = arenaChatInput.value.trim();
+            if (!text || !arenaJoined) return;
+            try {
+              await arenaCall('chat', { text });
+              arenaChatInput.value = '';
+              await arenaSync(true);
+            } catch (error) {
+              arenaStatus.textContent = 'Invio non riuscito: ' + error.message;
+            }
+          });
+        }
+
+        function updateRemotePlayers(players) {
+          remotePlayers = {};
+          for (const remote of (Array.isArray(players) ? players : [])) {
+            if (!remote.self && remote.alive) remotePlayers[remote.id] = remote;
+          }
+          if (arenaOnlineCount) arenaOnlineCount.textContent = (Array.isArray(players) ? players.length : 0) + ' online';
+        }
+
+        function renderArenaMessages(messages) {
+          if (!arenaChatBody || !Array.isArray(messages)) return;
+          for (const message of messages) {
+            const id = 'go-live-msg-' + message.id;
+            if (document.getElementById(id)) continue;
+            const row = document.createElement('div');
+            row.id = id;
+            const name = document.createElement('b');
+            name.textContent = String(message.username || 'Giocatore');
+            row.append(name, document.createTextNode(': ' + String(message.text || '')));
+            arenaChatBody.appendChild(row);
+          }
+          while (arenaChatBody.children.length > 100) arenaChatBody.removeChild(arenaChatBody.firstChild);
+          arenaChatBody.scrollTop = arenaChatBody.scrollHeight;
+        }
+
+        function reportArenaFailure(error) {
+          if (arenaFailureReported) return;
+          arenaFailureReported = true;
+          console.error('[Zero World] Arena multiplayer non disponibile:', error);
+          if (arenaStatus) arenaStatus.textContent = 'Arena non disponibile: ' + error.message;
+        }
+
+        async function arenaJoin() {
+          if (arenaJoinBusy || arenaJoined || !profile.serverAuth || mode !== 'play' || gameOver) return;
+          arenaJoinBusy = true;
+          if (arenaStatus) arenaStatus.textContent = 'Connessione all’arena globale…';
+          try {
+            const scale = SHARED_ARENA_SIZE / (Number(cfg.arena.size) || 3600);
+            const result = await arenaCall('join', {
+              score: Math.floor(player.mass),
+              cells: playerCells.map((cell) => ({
+                x: arenaCoordinates(cell.x), y: arenaCoordinates(cell.y),
+                m: cell.mass, r: massToRadius(cell.mass) * scale,
+                color: currentPlayerColor()
+              }))
+            });
+            arenaJoined = true;
+            arenaFailureReported = false;
+            if (arenaChatInput) arenaChatInput.disabled = false;
+            if (arenaStatus) arenaStatus.textContent = 'Sei nella stessa arena e chat degli altri giocatori.';
+            updateRemotePlayers(result.players || []);
+            await arenaSync(true);
+          } catch (error) {
+            reportArenaFailure(error);
+          } finally {
+            arenaJoinBusy = false;
+          }
+        }
+
+        async function arenaUpdate() {
+          if (!arenaJoined || arenaUpdateBusy || gameOver || !profile.serverAuth) return;
+          arenaUpdateBusy = true;
+          try {
+            const scale = SHARED_ARENA_SIZE / (Number(cfg.arena.size) || 3600);
+            const result = await arenaCall('update', {
+              score: Math.floor(player.mass),
+              cells: playerCells.map((cell) => ({
+                x: arenaCoordinates(cell.x), y: arenaCoordinates(cell.y),
+                m: cell.mass, r: massToRadius(cell.mass) * scale,
+                color: currentPlayerColor()
+              }))
+            });
+            if (result.dead) {
+              await triggerGameOver();
+              return;
+            }
+            const serverScore = Number(result.server_score);
+            if (Number.isFinite(serverScore) && serverScore > player.mass && playerCells.length) {
+              playerCells[0].mass += serverScore - player.mass;
+              syncPlayerAggregate();
+            }
+            updateRemotePlayers(result.players || []);
+          } catch (error) {
+            if (error.message.indexOf('Non sei nell') >= 0) {
+              arenaJoined = false;
+              await arenaJoin();
+            } else {
+              reportArenaFailure(error);
+            }
+          } finally {
+            arenaUpdateBusy = false;
+          }
+        }
+
+        async function arenaSync(force = false) {
+          if (!arenaJoined || arenaSyncBusy) return;
+          arenaSyncBusy = true;
+          try {
+            const result = await arenaCall('sync', { since: force ? 0 : arenaChatSince });
+            updateRemotePlayers(result.players || []);
+            renderArenaMessages(result.messages || []);
+            if (Number(result.last_chat) > arenaChatSince) arenaChatSince = Number(result.last_chat);
+            if (arenaStatus) arenaStatus.textContent = 'Sei nella stessa arena e chat degli altri giocatori.';
+          } catch (error) {
+            reportArenaFailure(error);
+          } finally {
+            arenaSyncBusy = false;
+          }
+        }
+
+        function startArenaTimers() {
+          setupArenaChat();
+          if (!profile.serverAuth) {
+            if (arenaChatInput) arenaChatInput.disabled = true;
+            if (arenaStatus) arenaStatus.textContent = 'Accedi dal portale per entrare nell’arena globale.';
+            return;
+          }
+          clearInterval(arenaSyncTimer);
+          clearInterval(arenaUpdateTimer);
+          arenaJoin();
+          arenaSyncTimer = setInterval(() => {
+            if (arenaJoined) arenaSync();
+            else arenaJoin();
+          }, 700);
+          arenaUpdateTimer = setInterval(arenaUpdate, 250);
+        }
+
+        async function arenaLeave() {
+          clearInterval(arenaSyncTimer);
+          clearInterval(arenaUpdateTimer);
+          if (!arenaJoined) return;
+          arenaJoined = false;
+          if (arenaChatInput) arenaChatInput.disabled = true;
+          if (arenaStatus) arenaStatus.textContent = 'Fuori dall’arena. Riavvia la partita per rientrare.';
+          try {
+            await arenaCall('leave');
+          } catch (error) {
+            console.warn('[Zero World] Uscita dall’arena non confermata:', error);
+          }
+        }
+
+        function drawRemotePlayers() {
+          const half = (Number(cfg.arena.size) || 3600) / 2;
+          const scale = (half * 2) / SHARED_ARENA_SIZE;
+          for (const remote of Object.values(remotePlayers)) {
+            for (const cell of (remote.cells || [])) {
+              const x = localCoordinates(cell.x);
+              const y = localCoordinates(cell.y);
+              if (x < -half - 1600 || x > half + 1600 || y < -half - 1600 || y > half + 1600) continue;
+              const radius = Math.max(5, Number(cell.r || Math.sqrt(Number(cell.m) || 10))) * scale;
+              const color = cell.color || remote.color || '#ef476f';
+              ctx.save();
+              ctx.shadowColor = color;
+              ctx.shadowBlur = 18;
+              ctx.fillStyle = color;
+              ctx.beginPath();
+              ctx.arc(x, y, radius, 0, Math.PI * 2);
+              ctx.fill();
+              ctx.shadowBlur = 0;
+              ctx.strokeStyle = '#ffffff';
+              ctx.lineWidth = Math.max(2, radius * 0.08);
+              ctx.stroke();
+              if (radius > 15) {
+                ctx.fillStyle = '#ffffff';
+                ctx.font = '700 ' + Math.max(11, Math.min(24, radius * 0.42)) + 'px Arial';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(String(remote.username || 'Giocatore'), x, y);
+              }
+              ctx.restore();
+            }
+          }
+        }
 
         // ================= New systems: abilities, power-ups, progression, UI =================
         let paused = false;
@@ -6826,6 +7070,7 @@
           godMode = { active: false, timer: 0, cooldown: 0 };
           effects = { speed: 0, magnet: 0, shield: 0, x2: 0, freeze: 0 };
           if (mode === 'play' && shopShieldStart()) effects.shield = 14;
+          if (mode === 'play' && profile.serverAuth) arenaJoin();
           powerups = [];
           arcadeCores = [];
           initZones();
@@ -6871,6 +7116,7 @@
         async function triggerGameOver() {
           if (gameOver) return;
           gameOver = true;
+          arenaLeave();
           player.vx = 0;
           player.vy = 0;
           targetPos.active = false;
@@ -6989,7 +7235,10 @@
           updateWalletUi();
           if (userMenuOpen) renderUserMenu();
           if (portalOpen) renderPortal();
+          startArenaTimers();
         })();
+
+        window.addEventListener('pagehide', arenaLeave, { once: true });
 
         if (mode === 'play') {
           addChatMsg('', 'Arena channel joined — press C or T to chat.', 'sys');
@@ -8281,6 +8530,7 @@
           }
 
           // Player blobs with multi-layered neon glow and dynamic growth pulse
+          drawRemotePlayers();
           const orderedCells = playerCells.slice().sort((a, b) => a.mass - b.mass);
           for (const c of orderedCells) {
             drawPlayerCell(c, playerColor);
