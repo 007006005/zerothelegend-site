@@ -3068,7 +3068,7 @@
           { id: 'telegram', label: 'Telegram', color: '#229ed9', icon: '\u2708' },
           { id: 'whatsapp', label: 'WhatsApp', color: '#1da851', icon: '\u260E' },
         ];
-        const ROLE_ORDER = ['user', 'vip', 'helper', 'mod', 'admin'];
+        const ROLE_ORDER = ['user', 'vip', 'helper', 'mod', 'admin', 'founder'];
         const SKIN_PRESETS = [
           '#00ffff', '#ffe600', '#ff2d95', '#00ffa2',
           '#b388ff', '#ff7a18', '#7fd4ff', '#ffffff',
