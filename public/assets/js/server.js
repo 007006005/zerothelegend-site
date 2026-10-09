@@ -9,14 +9,13 @@
 const express = require('express');
 const http = require('http');
 const path = require('path');
-const fs = require('fs');
 const crypto = require('crypto');
 const { WebSocketServer } = require('ws');
 const cors = require('cors');
 
 const app = express();
-const PORT = process.env.PORT || 8080;
-const PUBLIC_DIR = path.join(__dirname, 'public');
+const PORT = Number(process.env.WS_PORT || 3001);
+const PUBLIC_DIR = path.resolve(__dirname, '../..');
 
 // ---------------------------------------------------------------- Express & Static Routes
 app.use(cors());
@@ -29,43 +28,24 @@ app.use((req, res, next) => {
     next();
 });
 
-// Servizio dei file statici dalla cartella public o root
-if (fs.existsSync(PUBLIC_DIR)) {
-    app.use(express.static(PUBLIC_DIR, {
-        setHeaders: (res, reqPath) => {
-            if (reqPath.endsWith('.webp') || reqPath.endsWith('.png') || reqPath.endsWith('.svg')) {
-                res.setHeader('Cache-Control', 'public, max-age=31536000');
-            }
-        }
-    }));
-}
-app.use(express.static(__dirname));
-
 // Endpoint di Health Check obbligatorio per i deployment Railway
 app.get('/health', (req, res) => res.status(200).send('OK'));
 
 // Routing dinamico per il gioco
 app.get('/', (req, res) => {
-    const gamePath = path.join(PUBLIC_DIR, 'games', 'agar', 'game.html');
-    if (fs.existsSync(gamePath)) return res.sendFile(gamePath);
-    const rootGame = path.join(__dirname, 'game.html');
-    if (fs.existsSync(rootGame)) return res.sendFile(rootGame);
-    res.status(404).send('Game file not found');
+    res.sendFile(path.join(PUBLIC_DIR, 'games', 'agar', 'game.html'));
 });
 
 app.get('/games/agar', (req, res) => res.redirect('/games/agar/game.html'));
 app.get('/games/agar/', (req, res) => res.redirect('/games/agar/game.html'));
 
-// Fallback generale per risorse statiche
-app.get('*', (req, res) => {
-    const requestedFile = path.join(PUBLIC_DIR, req.path);
-    if (fs.existsSync(requestedFile) && fs.statSync(requestedFile).isFile()) {
-        return res.sendFile(requestedFile);
+app.use(express.static(PUBLIC_DIR, {
+    setHeaders: (res, reqPath) => {
+        if (reqPath.endsWith('.webp') || reqPath.endsWith('.png') || reqPath.endsWith('.svg')) {
+            res.setHeader('Cache-Control', 'public, max-age=31536000');
+        }
     }
-    const fallbackPath = path.join(PUBLIC_DIR, 'games', 'agar', 'game.html');
-    if (fs.existsSync(fallbackPath)) return res.sendFile(fallbackPath);
-    res.sendFile(path.join(__dirname, 'game.html'));
-});
+}));
 
 // ---------------------------------------------------------------- Configurazione Mondo di Gioco
 const CFG = {
