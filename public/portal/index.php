@@ -11396,7 +11396,11 @@
         }
         function fbFriendNetworkHtml(friends) {
           return friends.length
-            ? friends.map(f=>fbUserRow(f,(f.status==='pending'?'Richiesta in sospeso':'Stato: '+f.status)+(f.status==='pending'?' · richiesta da '+f.requested_by:''))).join('')
+            ? friends.map(f=>{
+              const incoming=f.status==='pending'&&String(f.requested_by)!==String(profile.id);
+              const detail=f.status==='pending'?'Richiesta '+(incoming?'ricevuta':'inviata')+(f.requested_by?' · da '+f.requested_by:''):'Stato: '+f.status;
+              return '<div class="fb-suite-item" style="display:flex;align-items:center;gap:8px">'+socialAvatar(f.name||'Utente','tiny')+'<div style="flex:1"><b>'+escapeHtml(f.name||'Utente')+'</b><div class="fb-suite-muted">'+escapeHtml(detail)+'</div></div>'+(incoming?'<button type="button" data-fb-friend-response="'+escapeHtml(f.id)+'" data-fb-friend-status="accepted">ACCETTA</button><button type="button" data-fb-friend-response="'+escapeHtml(f.id)+'" data-fb-friend-status="declined">RIFIUTA</button>':'')+'</div>';
+            }).join('')
             : '<div class="fb-suite-muted">Nessun contatto ancora.</div>';
         }
         function fbFriendResultHtml(users) {
@@ -11432,6 +11436,7 @@
           ptBodyEl.querySelectorAll('[data-fb-delete]').forEach(b=>b.addEventListener('click',async e=>{e.preventDefault();if(!confirm('Eliminare questo post?'))return;try{await socialApi('post_delete',{post_id:b.dataset.fbDelete});await loadSocialSuite(true);renderPortal();}catch(x){notify(x.message,'#ff5c7a');}}));
           ptBodyEl.querySelectorAll('[data-fb-report]').forEach(b=>b.addEventListener('click',async e=>{e.preventDefault();const reason=prompt('Motivo della segnalazione:');if(!reason)return;try{await socialApi('report',{target_type:'post',target_id:b.dataset.fbReport,reason});notify('Segnalazione inviata','#ffc94a');}catch(x){notify(x.message,'#ff5c7a');}}));
           bindFriendResultActions(ptBodyEl);
+          bindFriendNetworkActions(ptBodyEl);
           const mf=ptBodyEl.querySelector('#fb-msg-form'); if(mf) mf.addEventListener('submit',async e=>{e.preventDefault();try{await socialApi('message_send',{user_id:mf.querySelector('#fb-msg-to').value,body:mf.querySelector('#fb-msg-body').value});mf.querySelector('#fb-msg-body').value='';await loadSocialSuite(true);renderPortal();}catch(x){notify(x.message,'#ff5c7a');}});
           const gf=ptBodyEl.querySelector('#fb-group-form'); if(gf) gf.addEventListener('submit',async e=>{e.preventDefault();try{await socialApi('group_create',{name:gf.querySelector('#fb-group-name').value,description:gf.querySelector('#fb-group-desc').value});await loadSocialSuite(true);renderPortal();}catch(x){notify(x.message,'#ff5c7a');}});
           ptBodyEl.querySelectorAll('[data-fb-group]').forEach(b=>b.addEventListener('click',async e=>{e.preventDefault();try{if(b.dataset.fbJoin)await socialApi('group_join',{group_id:b.dataset.fbGroup,join:true});if(b.dataset.fbFollow)await socialApi('follow',{target_type:'group',target_id:b.dataset.fbGroup});await loadSocialSuite(true);renderPortal();}catch(x){notify(x.message,'#ff5c7a');}}));
@@ -11467,6 +11472,31 @@
               button.disabled=false;
               button.textContent=oldLabel;
               if(status)status.textContent=x.message||'Operazione non riuscita.';
+            }
+          }));
+        }
+        function bindFriendNetworkActions(root) {
+          root.querySelectorAll('[data-fb-friend-response]').forEach(button=>button.addEventListener('click',async e=>{
+            e.preventDefault();
+            const userId=button.dataset.fbFriendResponse;
+            const status=button.dataset.fbFriendStatus;
+            const network=ptBodyEl.querySelector('#fb-friend-network');
+            const oldLabel=button.textContent;
+            button.disabled=true;
+            button.textContent=status==='accepted'?'ACCETTO…':'RIFIUTO…';
+            try{
+              await socialApi('friend_respond',{user_id:userId,status});
+              await loadSocialSuite(true);
+              if(network)network.innerHTML=fbFriendNetworkHtml(fbSuiteData.friends||[]);
+              bindFriendNetworkActions(ptBodyEl);
+              const message=status==='accepted'?'Richiesta accettata: ora siete amici.':'Richiesta rifiutata.';
+              const statusEl=ptBodyEl.querySelector('#fb-friend-status');
+              if(statusEl)statusEl.textContent=message;
+            }catch(error){
+              button.disabled=false;
+              button.textContent=oldLabel;
+              const statusEl=ptBodyEl.querySelector('#fb-friend-status');
+              if(statusEl)statusEl.textContent=error.message||'Operazione non riuscita.';
             }
           }));
         }
