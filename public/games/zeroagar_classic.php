@@ -179,5 +179,6 @@ const chatForm=document.getElementById('arenaChatForm');if(chatForm)chatForm.add
 loadAccount();
 })();
 </script>
+<script src="/assets/js/global-arena-chat.js" defer></script>
 </body>
 </html>

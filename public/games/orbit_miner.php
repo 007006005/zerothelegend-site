@@ -13,4 +13,4 @@ async function submit(score,stats={}){score=Math.max(0,Math.floor(score));scoreE
 document.getElementById('back').onclick=()=>location.href='https://www.zerothelegend.com/portal/index.php';
 let run=false,score=0,rocks=[],t=0;addEventListener('mousemove',e=>{});function start(){run=true;score=0;t=0;rocks=[];for(let i=0;i<80;i++)rocks.push({x:Math.random()*innerWidth,y:Math.random()*innerHeight,r:4+Math.random()*8,on:1})}addEventListener('click',e=>{if(!run)return;for(const r of rocks)if(r.on&&Math.hypot(e.clientX-r.x,e.clientY-r.y)<22){r.on=0;score+=Math.round(15-r.r)}});function f(){if(run){t+=.016;if(t>20){run=false;submit(score,{seconds:20})}}x.fillStyle='#06111e';x.fillRect(0,0,innerWidth,innerHeight);rocks.forEach(r=>{if(r.on){x.fillStyle='#ffe600';x.beginPath();x.arc(r.x,r.y,r.r,0,7);x.fill()}});x.fillStyle='#00f0ff';x.font='700 26px Orbitron';x.fillText('MINA I CRISTALLI',30,45);requestAnimationFrame(f)}document.getElementById('start').onclick=start;requestAnimationFrame(f);
 loadBoard();
-</script></body></html>
+</script><script src="/assets/js/global-arena-chat.js" defer></script></body></html>

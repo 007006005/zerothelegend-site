@@ -33,4 +33,4 @@ function f(){
 document.getElementById('start').onclick=start;requestAnimationFrame(f);
 
 loadBoard();
-</script></body></html>
+</script><script src="/assets/js/global-arena-chat.js" defer></script></body></html>

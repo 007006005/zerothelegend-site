@@ -11686,5 +11686,6 @@
       })();
     </script>
     <div id="game-error-box" style="display:none;position:fixed;left:50%;top:16px;transform:translateX(-50%);z-index:99999;max-width:min(92vw,900px);padding:12px 16px;border:1px solid #ff356e;border-radius:10px;background:rgba(20,0,12,.94);color:#fff;font:600 13px/1.4 Arial,sans-serif;box-shadow:0 0 24px rgba(255,0,90,.35)"></div>
+  <script src="/assets/js/global-arena-chat.js" defer></script>
   </body>
 </html>
