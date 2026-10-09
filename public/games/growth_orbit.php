@@ -5357,9 +5357,20 @@
           });
           const text = await response.text();
           let data = null;
-          try { data = JSON.parse(text); } catch (_) {}
-          if (!response.ok || !data || data.success !== true) {
-            throw new Error((data && data.error) || ('Arena HTTP ' + response.status));
+          try {
+            data = JSON.parse(text);
+          } catch (_) {
+            data = null;
+          }
+          if (!response.ok) {
+            throw new Error((data && (data.error || data.message)) || ('Arena HTTP ' + response.status));
+          }
+          if (!data || data.success !== true) {
+            const detail = data
+              ? JSON.stringify(data)
+              : text.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+            const excerpt = detail ? detail.slice(0, 220) : 'risposta vuota';
+            throw new Error('Risposta arena inattesa (HTTP ' + response.status + '): ' + excerpt);
           }
           return data;
         }
