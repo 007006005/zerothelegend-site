@@ -27,6 +27,16 @@ $pdo->exec("CREATE TABLE IF NOT EXISTS za_game_flags (
     config_json TEXT NULL,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+$pdo->exec("CREATE TABLE IF NOT EXISTS zeroagar_arena_chat (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    arena_key VARCHAR(48) NOT NULL,
+    user_id VARCHAR(24) NOT NULL,
+    username VARCHAR(30) NOT NULL,
+    text VARCHAR(200) NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    KEY idx_arena_chat (arena_key, id),
+    KEY idx_chat_user (user_id, id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
 $need = function(string $role) use ($myRank): void {
     if ($myRank < role_rank($role)) json_response(['success'=>false,'error'=>"Azione riservata al ruolo $role o superiore."],403);
@@ -51,7 +61,7 @@ switch($action){
             'banned'=>$q('SELECT COUNT(*) FROM users WHERE is_banned=1'),
             'online'=>(int)$pdo->query("SELECT COUNT(*) FROM users WHERE last_seen >= '".date('Y-m-d H:i:s',time()-120)."'")->fetchColumn(),
             'rooms'=>$q("SELECT COUNT(*) FROM game_rooms WHERE status IN ('waiting','playing')"),
-            'messages'=>$q('SELECT COUNT(*) FROM lobby_chat'),
+            'messages'=>$q('SELECT COUNT(*) FROM lobby_chat')+(int)$pdo->query("SELECT COUNT(*) FROM zeroagar_arena_chat WHERE arena_key='ZeroArcade:global'")->fetchColumn(),
             'scores'=>$q('SELECT COUNT(*) FROM arcade_scores'),
             'progress'=>$q('SELECT COUNT(*) FROM game_progress'),
             'staff'=>$q("SELECT COUNT(*) FROM users WHERE role IN ('helper','moderatore','admin','founder')")
@@ -62,6 +72,11 @@ switch($action){
         $st=$pdo->prepare('SELECT id,username,email,role,coins,gems,xp,level,clan,is_banned,ban_reason,last_login,last_seen,created_at FROM users WHERE username LIKE ? OR email LIKE ? ORDER BY created_at DESC LIMIT 200');
         $st->execute([$term,$term]);
         json_response(['success'=>true,'users'=>$st->fetchAll(),'my_rank'=>$myRank,'roles'=>array_values(ARCADE_ROLES)]);
+
+    case 'online_users':
+        $st=$pdo->prepare('SELECT id,username,email,role,last_seen FROM users WHERE is_banned=0 AND last_seen >= ? ORDER BY last_seen DESC LIMIT 200');
+        $st->execute([date('Y-m-d H:i:s',time()-120)]);
+        json_response(['success'=>true,'users'=>$st->fetchAll(),'checked_at'=>date('c')]);
 
     case 'create_user':
         $need('admin');
@@ -119,11 +134,25 @@ switch($action){
         audit($cur,'delete_user',$t['username']);json_response(['success'=>true]);
 
     case 'chat_list':
-        $st=$pdo->query('SELECT id,username,text,created_at FROM lobby_chat ORDER BY id DESC LIMIT 200');json_response(['success'=>true,'messages'=>$st->fetchAll()]);
+        $channel=(string)($in['channel']??'lobby');
+        if($channel==='arena'){
+            $st=$pdo->prepare("SELECT id,username,text,created_at FROM zeroagar_arena_chat WHERE arena_key='ZeroArcade:global' ORDER BY id DESC LIMIT 200");
+            $st->execute();
+        }else{
+            $channel='lobby';
+            $st=$pdo->query('SELECT id,username,text,created_at FROM lobby_chat ORDER BY id DESC LIMIT 200');
+        }
+        json_response(['success'=>true,'channel'=>$channel,'messages'=>$st->fetchAll()]);
     case 'chat_delete':
-        $need('moderatore');$pdo->prepare('DELETE FROM lobby_chat WHERE id=?')->execute([(int)($in['id']??0)]);audit($cur,'chat_delete','#'.(int)($in['id']??0));json_response(['success'=>true]);
+        $need('moderatore');$id=(int)($in['id']??0);$channel=(string)($in['channel']??'lobby');
+        if($channel==='arena')$pdo->prepare("DELETE FROM zeroagar_arena_chat WHERE id=? AND arena_key='ZeroArcade:global'")->execute([$id]);
+        else{$channel='lobby';$pdo->prepare('DELETE FROM lobby_chat WHERE id=?')->execute([$id]);}
+        audit($cur,'chat_delete_'.$channel,'#'.$id);json_response(['success'=>true]);
     case 'chat_clear':
-        $need('admin');$pdo->exec('DELETE FROM lobby_chat');audit($cur,'chat_clear');json_response(['success'=>true]);
+        $need('admin');$channel=(string)($in['channel']??'lobby');
+        if($channel==='arena')$pdo->exec("DELETE FROM zeroagar_arena_chat WHERE arena_key='ZeroArcade:global'");
+        else{$channel='lobby';$pdo->exec('DELETE FROM lobby_chat');}
+        audit($cur,'chat_clear_'.$channel);json_response(['success'=>true]);
 
     case 'list_scores':
         $game=substr((string)($in['game']??''),0,30);$sql='SELECT s.game,s.user_id,s.score,s.updated_at,u.username,u.role FROM arcade_scores s JOIN users u ON u.id=s.user_id';$params=[];
