@@ -11360,7 +11360,7 @@
           profile.friends=(f.friends||[]).filter(x=>x.status==='accepted').map(x=>({n:x.name,lv:x.level||1,on:true,id:x.id}));
           profile.inbox=(f.notifications||[]).map(n=>({id:String(n.id),t:n.type||'Notifica',b:n.payload?.body||'',zc:0,claimed:n.read,d:n.created}));
           const h=socialHubState();
-          h.groups=f.groups||[];h.pages=f.pages||[];h.messages=f.messages||[];h.stories=f.stories||[];h.localPersistence=false;h.serverBacked=true;
+          h.groups=f.groups||[];h.pages=f.pages||[];h.stories=f.stories||[];h.localPersistence=false;h.serverBacked=true;
         }
         async function loadSocialSuite(force=false) {
           if (fbSuiteLoading) return false;
@@ -11468,6 +11468,7 @@
               if(status)status.textContent=action==='accept'?'Richiesta accettata: ora siete amici.':'Richiesta di amicizia inviata.';
               const network=ptBodyEl.querySelector('#fb-friend-network');
               if(network)network.innerHTML=fbFriendNetworkHtml(fbSuiteData.friends||[]);
+              renderPortalChatDocks();
             }catch(x){
               button.disabled=false;
               button.textContent=oldLabel;
@@ -11489,6 +11490,7 @@
               await loadSocialSuite(true);
               if(network)network.innerHTML=fbFriendNetworkHtml(fbSuiteData.friends||[]);
               bindFriendNetworkActions(ptBodyEl);
+              renderPortalChatDocks();
               const message=status==='accepted'?'Richiesta accettata: ora siete amici.':'Richiesta rifiutata.';
               const statusEl=ptBodyEl.querySelector('#fb-friend-status');
               if(statusEl)statusEl.textContent=message;
@@ -11527,6 +11529,7 @@
         // ===== Portal footer chats: local Facebook-style room + staff support =====
         let portalFbChatOpen = false;
         let portalSupportChatOpen = false;
+        let portalFbChatRefreshTimer = null;
 
         function portalStaffCanChat() {
           return hasPerm('mod');
@@ -11537,23 +11540,41 @@
         function portalChatActor() {
           return profile.loggedIn ? profile.name : PT_T('guest');
         }
-        function portalFbPeers(h) {
-          const names = [];
-          (h.messages || []).forEach((m) => { if (m && m.peer) names.push(m.peer); });
-          (profile.friends || []).forEach((f) => { if (f && f.n) names.push(f.n); });
-          if (!names.length) names.push('NovaKid');
-          return Array.from(new Set(names)).slice(0, 6);
+        function portalFbPeers() {
+          if (!profile.loggedIn) return [];
+          return (fbSuiteData.friends || [])
+            .filter((friend) => friend && friend.status === 'accepted' && friend.id)
+            .map((friend) => ({ id: String(friend.id), name: String(friend.name || 'Utente') }));
         }
         function portalChatMessageMarkup(message, actor) {
           const from = String(message && (message.from || message.n || 'Zero') || 'Zero');
           return '<div class="portal-chat-message' + (from === actor ? ' me' : '') + '"><b>' + escapeHtml(from) + '</b>' +
             escapeHtml(message && (message.text || message.t || '') || '') + '<small>' + escapeHtml(message && (message.time || 'Ora') || 'Ora') + '</small></div>';
         }
-        function portalSendFacebookMessage(peer, text) {
+        async function portalSendFacebookMessage(peer, text, form) {
           const value = String(text || '').trim().slice(0, 240);
           if (!value) return;
-          socialHubSendMessage(peer || 'NovaKid', value);
-          portalFbChatOpen = true;
+          if (!profile.loggedIn || !peer) {
+            notify('Accedi e aggiungi un amico per inviare messaggi.', '#ff5c7a');
+            return;
+          }
+          const button = form && form.querySelector('button[type="submit"]');
+          if (button) button.disabled = true;
+          try {
+            await socialApi('message_send', { user_id: peer, body: value });
+            await loadSocialSuite(true);
+            portalFbChatOpen = true;
+            renderPortalChatDocks();
+          } catch (error) {
+            console.error('[ZeroSocial] Facebook chat send failed:', error);
+            notify(error.message || 'Messaggio non inviato.', '#ff5c7a');
+          } finally {
+            if (button) button.disabled = false;
+          }
+        }
+        async function refreshPortalFacebookChat() {
+          if (!portalFbChatOpen || !profile.loggedIn) return;
+          await loadSocialSuite(true);
           renderPortalChatDocks();
         }
         function portalSendSupportMessage(text) {
@@ -11584,24 +11605,50 @@
           if (!fbDock || !fbPanel || !fbToggle) return;
           const h = socialHubState();
           const actor = portalChatActor();
-          const peers = portalFbPeers(h);
-          const peer = h.activePeer && peers.indexOf(h.activePeer) >= 0 ? h.activePeer : peers[0];
-          h.activePeer = peer;
-          const chat = (h.messages || []).find((m) => m.peer === peer);
-          const thread = chat && Array.isArray(chat.messages) ? chat.messages.slice(-30) : [];
-          fbPanel.innerHTML = '<div class="portal-chat-head"><b>MESSENGER · ' + escapeHtml(peer) + '</b><span>● locale</span></div>' +
-            '<div class="portal-chat-peer-list">' + peers.map((p) => '<button type="button" class="portal-chat-peer' + (p === peer ? ' on' : '') + '" data-portal-chat-peer="' + escapeHtml(p) + '">' + escapeHtml(p) + '</button>').join('') + '</div>' +
-            '<div class="portal-chat-log">' + (thread.length ? thread.map((m) => portalChatMessageMarkup(m, actor)).join('') : '<div class="portal-chat-empty">Nessun messaggio in questa room.<br>Scrivi al tuo contatto dell’arena.</div>') + '</div>' +
-            '<form class="portal-chat-form" id="portal-fb-chat-form" autocomplete="off"><input maxlength="240" placeholder="Scrivi a ' + escapeHtml(peer) + '..." aria-label="Messaggio Facebook chat" /><button type="submit">INVIA</button></form>';
+          const peers = portalFbPeers();
+          const peer = peers.find((item) => item.id === String(h.activePeer || '')) || peers[0];
+          h.activePeer = peer ? peer.id : '';
+          const thread = peer
+            ? (fbSuiteData.messages || []).filter((message) => String(message.peer?.id || '') === peer.id).reverse().slice(-30)
+            : [];
+          const peerName = peer ? peer.name : '';
+          const emptyMessage = !profile.loggedIn
+            ? 'Accedi per vedere la chat con i tuoi amici.'
+            : peers.length
+              ? 'Nessun messaggio con questo amico. Scrivigli per iniziare la conversazione.'
+              : 'Aggiungi o accetta un amico per iniziare a chattare.';
+          fbPanel.innerHTML = '<div class="portal-chat-head"><b>' + (peer ? 'MESSENGER · ' + escapeHtml(peerName) : 'MESSENGER') + '</b><span>● online</span></div>' +
+            '<div class="portal-chat-peer-list">' + peers.map((item) => '<button type="button" class="portal-chat-peer' + (peer && item.id === peer.id ? ' on' : '') + '" data-portal-chat-peer="' + escapeHtml(item.id) + '">' + escapeHtml(item.name) + '</button>').join('') + '</div>' +
+            '<div class="portal-chat-log">' + (thread.length ? thread.map((message) => portalChatMessageMarkup({
+              from: String(message.from) === String(profile.id) ? actor : (message.peer?.name || peerName),
+              text: message.body,
+              time: message.created
+            }, actor)).join('') : '<div class="portal-chat-empty">' + escapeHtml(emptyMessage) + '</div>') + '</div>' +
+            '<form class="portal-chat-form" id="portal-fb-chat-form" autocomplete="off"><input id="portal-fb-chat-message" name="message" maxlength="240" placeholder="' + (peer ? 'Scrivi a ' + escapeHtml(peerName) + '...' : 'Nessun amico disponibile') + '" aria-label="Messaggio Facebook chat" ' + (profile.loggedIn && peer ? '' : 'disabled') + ' /><button type="submit" ' + (profile.loggedIn && peer ? '' : 'disabled') + '>INVIA</button></form>';
           fbDock.classList.toggle('open', portalFbChatOpen);
           const fbLog = fbPanel.querySelector('.portal-chat-log');
           if (fbLog) fbLog.scrollTop = fbLog.scrollHeight;
-          fbToggle.onclick = (e) => { e.preventDefault(); portalFbChatOpen = !portalFbChatOpen; renderPortalChatDocks(); };
+          fbToggle.onclick = (e) => {
+            e.preventDefault();
+            portalFbChatOpen = !portalFbChatOpen;
+            if (portalFbChatRefreshTimer) {
+              clearInterval(portalFbChatRefreshTimer);
+              portalFbChatRefreshTimer = null;
+            }
+            if (portalFbChatOpen && profile.loggedIn) {
+              refreshPortalFacebookChat();
+              portalFbChatRefreshTimer = setInterval(refreshPortalFacebookChat, 8000);
+            }
+            renderPortalChatDocks();
+          };
           fbPanel.querySelectorAll('[data-portal-chat-peer]').forEach((b) => b.addEventListener('click', (e) => {
             e.preventDefault(); h.activePeer = b.dataset.portalChatPeer; socialHubSave(); renderPortalChatDocks();
           }));
           const fbForm = fbPanel.querySelector('#portal-fb-chat-form');
-          if (fbForm) fbForm.addEventListener('submit', (e) => { e.preventDefault(); portalSendFacebookMessage(peer, fbForm.querySelector('input').value); });
+          if (fbForm) fbForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            portalSendFacebookMessage(peer && peer.id, fbForm.querySelector('input').value, fbForm);
+          });
 
           if (!supportDock || !supportPanel || !supportToggle) return;
           const allowed = portalStaffCanChat();
