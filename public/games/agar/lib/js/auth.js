@@ -1,67 +1,96 @@
-/* Login / registrazione / progressi. Richiede window.__api_base (definito in game.html). */
+/* Reuses the signed-in Zero World session and Agar profile stored in the portal DB. */
 (function () {
-  var KEY = 'agar_token', api = window.__api_base || '/games/agar/api/';
-  var token = null;
-  try { token = localStorage.getItem(KEY); } catch (e) {}
-  window.__agarToken = function () { return token; };
+  var account = { ready: false, user: null, profile: null };
+  var accountStatus;
+  window.ZLAgarAccount = account;
+  window.__agarToken = function () { return null; };
 
-  function call(path, body, auth) {
-    var h = { 'Content-Type': 'application/json' };
-    if (auth && token) h.Authorization = 'Bearer ' + token;
-    return fetch(api + path, { method: body ? 'POST' : 'GET', headers: h, body: body ? JSON.stringify(body) : undefined })
-      .then(function (r) { return r.json().catch(function () { return { ok: false, error: 'Risposta non valida (HTTP ' + r.status + ')' }; }); })
-      .catch(function () { return { ok: false, error: 'Server non raggiungibile' }; });
-  }
-  function setToken(t) {
-    token = t;
-    try { t ? localStorage.setItem(KEY, t) : localStorage.removeItem(KEY); } catch (e) {}
-  }
-
-  var box = document.createElement('div');
-  box.style.cssText = 'position:fixed;left:8px;bottom:8px;z-index:99999;background:rgba(0,0,0,.72);color:#fff;' +
-    'font:13px/1.4 Arial,sans-serif;padding:8px 10px;border-radius:8px;max-width:210px';
-  document.body.appendChild(box);
-  var inp = 'display:block;width:100%;box-sizing:border-box;margin:3px 0;padding:4px;border:0;border-radius:4px;font-size:13px';
-  var btn = 'padding:4px 8px;margin:3px 4px 0 0;border:0;border-radius:4px;background:#007bff;color:#fff;cursor:pointer;font-size:12px';
-  function esc(s) { return String(s).replace(/[&<>"']/g, function (c) { return '&#' + c.charCodeAt(0) + ';'; }); }
-
-  function showGuest(msg) {
-    box.innerHTML = '<b>Accedi per salvare i progressi</b>' +
-      '<input id="ag_u" placeholder="Username" maxlength="16" autocomplete="username" style="' + inp + '">' +
-      '<input id="ag_p" type="password" placeholder="Password (min 8)" maxlength="72" autocomplete="current-password" style="' + inp + '">' +
-      '<button id="ag_l" style="' + btn + '">Accedi</button><button id="ag_r" style="' + btn + '">Registrati</button>' +
-      '<div id="ag_m" style="color:#ffb3b3;margin-top:4px">' + (msg ? esc(msg) : '') + '</div>';
-    function go(path) {
-      var u = document.getElementById('ag_u').value, p = document.getElementById('ag_p').value;
-      call(path, { username: u, password: p }).then(function (d) {
-        if (!d.ok) return (document.getElementById('ag_m').textContent = d.error || 'Errore');
-        setToken(d.token); showUser(d.user);
-        // il token viene inviato all'apertura del WebSocket: se il gioco è ricarico la pagina per riconnettere
-        window.location.reload();
-      });
+  function api(path, body) {
+    var url = window.zeroBackendUrl ? window.zeroBackendUrl(path) : path;
+    var options = { method: body ? 'POST' : 'GET', credentials: 'include', headers: {} };
+    var controller = new AbortController();
+    var timeout = setTimeout(function () { controller.abort(); }, 8000);
+    options.signal = controller.signal;
+    if (body) {
+      options.headers['Content-Type'] = 'application/json';
+      options.body = JSON.stringify(body);
     }
-    document.getElementById('ag_l').onclick = function () { go('login.php'); };
-    document.getElementById('ag_r').onclick = function () { go('register.php'); };
-  }
-  function showUser(u) {
-    box.innerHTML = '<b>' + esc(u.name) + '</b> · Lv ' + (u.level | 0) + '<br>XP: ' + (u.xp | 0) +
-      (u.kills !== undefined ? '<br>Kill: ' + u.kills + ' · Max massa: ' + u.best_mass : '') +
-      '<br><button id="ag_o" style="' + btn + '">Esci</button><button id="ag_t" style="' + btn + '">Top 20</button>' +
-      '<div id="ag_top"></div>';
-    document.getElementById('ag_o').onclick = function () { setToken(null); window.location.reload(); };
-    document.getElementById('ag_t').onclick = function () {
-      call('leaderboard.php').then(function (d) {
-        if (!d.ok) return;
-        document.getElementById('ag_top').innerHTML = '<ol style="margin:4px 0 0 16px;padding:0">' +
-          d.top.map(function (r) { return '<li>' + esc(r.name) + ' – Lv ' + r.level + '</li>'; }).join('') + '</ol>';
+    return fetch(url, options).then(function (response) {
+      return response.json().catch(function () {
+        throw new Error('Risposta API non valida (HTTP ' + response.status + ').');
+      }).then(function (data) {
+        if (!response.ok || data.success === false) throw new Error(data.error || 'Richiesta API non riuscita.');
+        return data;
       });
-    };
+    }).finally(function () { clearTimeout(timeout); });
   }
 
-  if (token) {
-    call('me.php', null, true).then(function (d) {
-      if (d.ok) showUser(d.user); else { setToken(null); showGuest(); }
+  function renderAccountStatus(text) {
+    if (!accountStatus) {
+      accountStatus = document.createElement('div');
+      accountStatus.id = 'zlAgarAccountStatus';
+      accountStatus.setAttribute('role', 'status');
+      accountStatus.style.cssText = 'margin:5px 0;color:#168c4a;font:12px/1.4 Arial,sans-serif';
+      var input = document.querySelector('.u-input');
+      if (input) input.appendChild(accountStatus);
+    }
+    accountStatus.textContent = text;
+  }
+
+  function setAccount(user, profile) {
+    account.user = user;
+    account.profile = profile || null;
+    var nickname = document.getElementById('nick');
+    if (nickname) {
+      nickname.value = user.username;
+      nickname.readOnly = true;
+      nickname.setAttribute('aria-label', 'Account Zero World: ' + user.username);
+    }
+    var level = profile && profile.level ? ' · Livello ' + profile.level : '';
+    renderAccountStatus('Connesso con Zero World: ' + user.username + level);
+    window.dispatchEvent(new CustomEvent('zl-agar-account-ready', { detail: account }));
+  }
+
+  window.addEventListener('zl-agar-game-over', function (event) {
+    if (!account.user || account.submitting) return;
+    var score = Math.max(0, Math.min(600000, Math.floor(Number(event.detail && event.detail.score) || 0)));
+    if (!score) return;
+    account.submitting = true;
+    api('/api/agar_io.php?action=submit', { action: 'submit', score: score })
+      .then(function (result) {
+        if (account.profile) {
+          account.profile.xp = Number(result.earned_xp || account.profile.xp || 0);
+          account.profile.level = Number(result.level || account.profile.level || 1);
+        }
+        renderAccountStatus('Partita salvata per ' + account.user.username + ' · record ' + Number(result.new_high || 0));
+      })
+      .catch(function (error) {
+        console.error('[ZeroLegend Agar] Salvataggio partita non riuscito:', error);
+        renderAccountStatus('Account ' + account.user.username + ' · salvataggio non riuscito');
+      })
+      .finally(function () { account.submitting = false; });
+  });
+
+  var playButton = document.getElementById('playBtn');
+  if (playButton) playButton.disabled = true;
+
+  api('/api/auth.php?action=me')
+    .then(function (session) {
+      if (!session.user) return;
+      var user = session.user;
+      return api('/api/agar_io.php?action=load')
+        .then(function (result) { setAccount(user, result.state); })
+        .catch(function (error) {
+          console.error('[ZeroLegend Agar] Caricamento profilo non riuscito:', error);
+          setAccount(user, null);
+          renderAccountStatus('Account ' + user.username + ' · profilo non disponibile');
+        });
+    })
+    .catch(function (error) {
+      console.error('[ZeroLegend Agar] Verifica sessione non riuscita:', error);
+    })
+    .finally(function () {
+      account.ready = true;
+      if (playButton) playButton.disabled = false;
     });
-    box.textContent = '…';
-  } else showGuest();
 })();

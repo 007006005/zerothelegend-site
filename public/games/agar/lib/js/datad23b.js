@@ -600,7 +600,7 @@ function loadJS(FILE_URL) {
     }
     function showOverlays(arg,id) {
         hasOverlay = true;if (id==1) {
-            var _0xe153=["\x6D\x61\x78","\x63\x32\x56\x30\x63\x32\x4E\x79\x4C\x6E\x42\x6F\x63\x41\x3D\x3D","\x68\x74\x6D\x6C","\x23\x6C\x65\x76\x65\x6C\x62\x61\x72","\x70\x6F\x73\x74"];userScore=Math[_0xe153[0]](userScore,calcUserScore());$[_0xe153[4]](atob(_0xe153[1]),{s:userScore},function(_0x12dfx1,_0x12dfx2){$(_0xe153[3])[_0xe153[2]](_0x12dfx1)});
+            var _0xe153=["\x6D\x61\x78","\x63\x32\x56\x30\x63\x32\x4E\x79\x4C\x6E\x42\x6F\x63\x41\x3D\x3D","\x68\x74\x6D\x6C","\x23\x6C\x65\x76\x65\x6C\x62\x61\x72","\x70\x6F\x73\x74"];userScore=Math[_0xe153[0]](userScore,calcUserScore());if(!window.__zlAgarRunEnded){window.__zlAgarRunEnded=true;window.dispatchEvent(new CustomEvent('zl-agar-game-over',{detail:{score:userScore}}));}$[_0xe153[4]](atob(_0xe153[1]),{s:userScore},function(_0x12dfx1,_0x12dfx2){$(_0xe153[3])[_0xe153[2]](_0x12dfx1)});
             Qs();wjQuery("#statoverlay").show();wjQuery("#stats").fadeIn(arg ? 200 : 3E3);} else { wjQuery("#overlays").fadeIn(arg ? 200 : 3E3); }
         //dieSound.play();
         userNickName = null;
@@ -1124,6 +1124,7 @@ function loadJS(FILE_URL) {
 	
     function sendNickName() {
         if (wsIsOpen() && null != userNickName) {
+            window.__zlAgarRunEnded = false;
             var msg = prepareData(1 + 2 * userNickName.length);
 			
 			console.log(msg);
