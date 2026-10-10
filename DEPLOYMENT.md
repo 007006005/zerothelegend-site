@@ -65,7 +65,7 @@ The full administration panel must be opened on the Railway backend domain (`htt
 4. Confirm the FTP site loads over HTTPS and the two frontend scripts return successfully. Test GeoIP localization and gameplay.
 5. Open `https://agar10-production.up.railway.app/api/auth.php?action=me`; it must return JSON, not HTTP 502. Check Railway deployment logs, service root directory, and startup/port configuration if the service does not respond.
 6. After Railway responds, open `https://games.zerothelegend.com/api/auth.php?action=me`; it must return JSON, not an IONOS placeholder page. If it returns HTML, the `games` DNS record is not connected to the Railway service yet.
-7. Open `https://games.zerothelegend.com/games/agar/`, start a game, and confirm the browser WebSocket handshake is `101 Switching Protocols` rather than a redirect. Check the Railway logs for `ZeroAgar Server running on port 3001` if the socket does not connect.
-8. Verify login, registration, account-name display, profile persistence, and logout against Railway. Verify score saving and Agar login separately before announcing those flows ready.
+7. Open `https://games.zerothelegend.com/games/agar/`, start a game, and confirm the `wss://games.zerothelegend.com/agar-ws/` WebSocket handshake is `101 Switching Protocols` rather than a redirect. Check the Railway logs for `ZeroAgar Server running on port 3001` if the socket does not connect.
+8. Sign in through the Zero World portal, open Agar in the same browser, and verify that the game shows the portal username without a separate Agar login. Finish a game and verify the result is saved to the same account; then test logout and confirm a guest session is not associated with that account.
 
 If Facebook login is enabled, add `https://games.zerothelegend.com/api/fb_callback.php` as the OAuth redirect URI in the Facebook app settings.
