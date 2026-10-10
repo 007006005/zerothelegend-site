@@ -59,7 +59,7 @@
     apply(load());
     var b=document.getElementById('zlOpenUserSettings'), c=document.getElementById('zlSettingsClose'), d=document.getElementById('zlSettingsDone'), r=document.getElementById('zlSettingsReset');
     if(b)b.onclick=open;if(c)c.onclick=close;if(d)d.onclick=close;if(r)r.onclick=function(){save(Object.assign({},defaults));render()};
-    document.addEventListener('keydown',function(e){if((e.key==='u'||e.key==='U')&&!['INPUT','TEXTAREA'].includes(document.activeElement.tagName)){open()} if(e.key==='Escape')close()});
+    document.addEventListener('keydown',function(e){if((e.key==='u'||e.key==='U')&&!['INPUT','TEXTAREA'].includes(document.activeElement.tagName)){open()} if(e.key==='Escape'){var mm=document.getElementById('zlUserSettings');if(mm&&mm.classList.contains('is-open'))close();else open();}});
   });
   window.ZLUserSettings={open:open,close:close,load:load,save:save,defaults:defaults};
 
