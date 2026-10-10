@@ -502,12 +502,11 @@
                     </span>
                     </div>
                     <ul id="gamemodes" class="dropdown-menu">
-                        <li class="color1" class="srv">FFA 1</li>
-                        <li class="color3" class="srv">VIRUS EXP 1</li>
-                        <li class="color4" class="srv">VIRUS EXP 2</li>
-						<li class="color6" class="srv">VIRUS POPSPLIT</li>
-                        <li class="color5" class="srv">CRAZY 1</li>
-                        <li class="color6" class="srv">EASY 1</li>
+                        <li id=":ffa" class="color1 srv">FFA</li>
+                        <li id=":ffa2" class="color6 srv">FFA 2</li>
+                        <li id=":teams" class="color3 srv">Teams</li>
+                        <li id=":experimental" class="color5 srv">Experimental</li>
+                        <li id=":party" class="color4 srv">Party privata</li>
                     </ul>
                 </div>
                  <div style="width:200px; height:250px; overflow: auto;">
@@ -696,10 +695,11 @@ document.addEventListener("DOMContentLoaded", function() {
 <script>/* ZeroLegend: cookie-consent plugin removed; no external consent library required. */</script>
 	          
 
-<script>document.querySelectorAll("#gamemodes li.srv").forEach(function(e){e.id=location.host});</script>
+
 <script src="/assets/js/deployment.js"></script>
 <script src="lib/js/auth.js?v=2"></script>
 <script src="lib/js/zerolegend_specials.js?v=1"></script>
+<script>window.addEventListener("load",function(){var m=location.search.match(/[?&]party=([A-Za-z0-9]{4,12})/);if(m){setTimeout(function(){if(window.setGameMode)setGameMode(":party:"+m[1].toUpperCase())},800)}});</script>
 </body>
 
 <!-- Mirrored from https://agar.cc/ by HTTrack Website Copier/3.x [XR&CO], Tue, 06 Oct 2026 15:14:55 GMT -->
