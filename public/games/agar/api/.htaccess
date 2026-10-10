@@ -8,3 +8,9 @@ RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
 <Files "bootstrap.php">
   Require all denied
 </Files>
+SetEnv AUTH_SECRET "incolla_qui_il_primo_segreto"
+SetEnv SERVER_KEY "incolla_qui_il_secondo_segreto"
+SetEnv DB_HOST "localhost"
+SetEnv DB_NAME "nome_del_database"
+SetEnv DB_USER "utente_del_database"
+SetEnv DB_PASS "password_del_database"
