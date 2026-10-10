@@ -465,12 +465,10 @@ function loadJS(FILE_URL) {
     function ca(a) {
         zA = a;
         if (a != gameMode) {
-            if(a == ":ffa"){
-                a = __ana_server;
-            } else if(a == ":teams") {
-                a = __ana_server;
-            } else if(a == ":ffa2") {
-                a = __ana_server;
+            if (typeof a === "string" && a.charAt(0) === ":") {
+                var zlParts = a.split(":");
+                var zlRoom = zlParts[2] ? "&room=" + encodeURIComponent(zlParts[2]) : "";
+                a = __ana_server + "?mode=" + (zlParts[1] || "ffa") + zlRoom;
             }
 
             CONNECTION_URL = a;
