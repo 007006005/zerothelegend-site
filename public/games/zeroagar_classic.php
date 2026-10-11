@@ -33,6 +33,39 @@ $user = null;
 #feed{position:absolute;right:10px;top:310px;width:230px;z-index:9;pointer-events:none}
 .feed-item{background:rgba(0,0,0,.68);color:#fff;font-size:12px;padding:5px 9px;border-radius:12px;margin-bottom:4px}
 #pauseBox{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);display:none;padding:18px 28px;font-size:20px;font-weight:800;z-index:26;text-align:center}
+.panel,#bottom,#touch,#powerups,#feed,#tips,#quick,.toast{zoom:var(--ui,1)}
+#profile{position:relative;cursor:pointer}.caret{float:right;font-size:10px;font-weight:700;color:#0876d1;margin-top:4px}
+.um{position:absolute;left:0;top:calc(100% + 6px);width:100%;background:#fff;border-radius:10px;box-shadow:0 6px 22px rgba(0,0,0,.28);overflow:hidden;z-index:30;cursor:default}
+.um button{display:block;width:100%;text-align:left;background:transparent;color:inherit;border-radius:0;padding:11px 14px;font-size:13px}.um button:hover{background:rgba(19,184,239,.14)}
+#quick{position:absolute;right:14px;bottom:14px;display:flex;gap:8px;z-index:15;pointer-events:auto}
+#quick button{width:44px;height:44px;border-radius:50%;background:rgba(255,255,255,.96);box-shadow:0 2px 10px rgba(0,0,0,.2);font-size:20px;padding:0}
+#fps{position:absolute;left:10px;top:136px;background:rgba(0,0,0,.65);color:#fff;font:700 11px/1 monospace;padding:5px 8px;border-radius:8px;z-index:9;pointer-events:none}
+#overlay{position:absolute;inset:0;background:rgba(0,0,0,.45);display:none;align-items:center;justify-content:center;z-index:40;pointer-events:auto;padding:12px}
+#sheet{background:#fff;color:#222;border-radius:14px;width:min(560px,100%);max-height:88vh;overflow:auto;box-shadow:0 10px 40px rgba(0,0,0,.35);zoom:var(--ui,1)}
+.sh-head{display:flex;justify-content:space-between;align-items:center;padding:14px 16px;border-bottom:1px solid rgba(0,0,0,.1);font-weight:800;font-size:17px}.sh-head button{padding:6px 11px}
+.sh-tabs{display:flex;gap:6px;padding:10px 12px;flex-wrap:wrap;border-bottom:1px solid rgba(0,0,0,.08)}
+.sh-tabs button{background:#eef1f4;color:#333;padding:7px 12px;font-size:12px}.sh-tabs button.on{background:#13b8ef;color:#fff}
+.sh-body{padding:8px 16px 16px}.sh-menu button{width:100%;margin:5px 0;padding:13px;font-size:15px}
+.opt{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid rgba(0,0,0,.06);font-size:14px}
+.opt small{display:block;color:#777;font-size:11px;margin-top:2px}
+.sw{position:relative;width:44px;height:24px;background:#c7ccd1;border-radius:12px;cursor:pointer;flex:none;transition:.15s}.sw:after{content:'';position:absolute;top:3px;left:3px;width:18px;height:18px;background:#fff;border-radius:50%;transition:.15s}.sw.on{background:#58d100}.sw.on:after{left:23px}
+.opt select{padding:7px 9px;border:1px solid #bbb;border-radius:6px;font-size:13px;background:#fff;color:#222}
+.rng{display:flex;align-items:center;gap:8px}.rng input{width:150px}.rng span{min-width:42px;text-align:right;font-size:12px}
+.keys{padding:10px 0}
+.sh-foot{display:flex;gap:8px;padding:12px 16px;border-top:1px solid rgba(0,0,0,.1)}.sh-foot button{flex:1}
+.stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}.stat{background:#f2f4f6;border-radius:8px;padding:10px;text-align:center}.stat b{display:block;font-size:20px}.stat span{font-size:11px;color:#666}
+body.dark{background:#10141a;color:#e8ecf1}body.dark #game{background:#151a20}
+body.dark .panel,body.dark .um,body.dark #sheet{background:rgba(28,33,41,.97);color:#e8ecf1;border-color:rgba(255,255,255,.1)}
+body.dark .help,body.dark .meta,body.dark .opt small,body.dark .stat span{color:#9aa4b2}
+body.dark .mode button,body.dark .bottom-btn,body.dark #quick button,body.dark .sh-tabs button,body.dark .stat{background:#262d38;color:#e8ecf1;border-color:#333b48}
+body.dark .sh-tabs button.on{background:#13b8ef;color:#fff}
+body.dark .mode button.on{background:#ff3f58;color:#fff}
+body.dark #nick,body.dark .opt select{background:#1d232c;color:#e8ecf1;border-color:#3a4351}
+body.dark .chat-body,body.dark .chat-emotes,body.dark .chat-form,body.dark .chat-form input{background:#1d232c;color:#e8ecf1}
+body.dark .chat-msg b,body.dark .row.me{color:#5cc8ff}
+body.dark .pu{background:rgba(28,33,41,.95);color:#e8ecf1}
+body.dark .sh-head,body.dark .sh-tabs,body.dark .opt,body.dark .sh-foot{border-color:rgba(255,255,255,.1)}
+body.dark .sw{background:#4a5361}body.dark .sw.on{background:#58d100}
 @media(pointer:coarse){#touch{display:block}}
 </style>
 </head>
@@ -42,13 +75,21 @@ $user = null;
   <div id="topbar">
     <div id="profile" class="panel">
       <div id="avatar" class="avatar"></div>
-      <div id="playerName">Caricamento…</div><span id="role" class="badge">USER</span>
+      <div id="playerName">Caricamento…</div><span id="role" class="badge">USER</span> <span class="caret">▾ MENU</span>
       <div class="xp"><i id="xpbar"></i></div>
       <div id="meta" class="meta">LV1 · 0 XP · Record 0</div>
+      <div id="userMenu" class="um" style="display:none">
+        <button data-um="profile">👤 Profilo e statistiche</button>
+        <button data-um="settings">⚙️ Impostazioni</button>
+        <button data-um="fullscreen">⛶ Schermo intero</button>
+        <button data-um="save">💾 Salva progressi</button>
+        <button data-um="refresh">🔄 Aggiorna account</button>
+        <button data-um="portal">🏠 Portale</button>
+      </div>
     </div>
     <div id="leader" class="panel"><div class="leaderTitle">Classifica</div><div id="leaders"></div></div>
   </div>
-  <div id="tips">Mouse / dito = movimento · SPACE = split · W = espelli massa · P = pausa · M = minimappa · raccogli i bonus ⚡🛡️🧲✨</div>
+  <div id="tips">Mouse / dito = movimento · SPACE = split · W = espelli massa · P = pausa · ESC = menu · M = minimappa · raccogli i bonus ⚡🛡️🧲✨</div>
   <div id="powerups"></div>
   <div id="feed"></div>
   <div id="pauseBox" class="panel">⏸ PAUSA<div class="help">premi P per riprendere</div></div>
@@ -59,6 +100,8 @@ $user = null;
       <p id="loginInfo" class="help" style="text-align:left">Controllo sessione…</p>
       <button class="action" id="refreshProfile">AGGIORNA</button>
       <button class="action" id="saveNow">SALVA PROGRESSI</button>
+      <button class="action" id="profileBtn">PROFILO</button>
+      <button class="action" id="settingsBtn">IMPOSTAZIONI</button>
       <button class="action gray" id="portalBtn">PORTALE</button>
     </div>
     <div id="center" class="box panel">
@@ -87,6 +130,9 @@ $user = null;
   </div>
   <div id="touch"><button class="touchbtn" id="tsplit">SPLIT</button><button class="touchbtn" id="teject">MASSA</button></div>
   <div id="toast" class="toast"></div>
+  <div id="fps" style="display:none">0 FPS</div>
+  <div id="quick"><button id="gearBtn" title="Menu e impostazioni">⚙️</button><button id="fsBtn" title="Schermo intero">⛶</button></div>
+  <div id="overlay"><div id="sheet"></div></div>
   <div id="arenaChat" class="panel">
     <div class="chat-head"><span>💬 CHAT ARENA</span><span class="chat-count" id="arenaOnline">0 online</span></div>
     <div class="chat-body" id="arenaChatBody"></div>
@@ -106,7 +152,15 @@ const ARENA_API='../api/arena_live.php';
 const PORTAL_URL='https://www.zerothelegend.com/portal/index.php';
 const canvas=document.getElementById('canvas'),ctx=canvas.getContext('2d');
 const mini=document.getElementById('mini'),mctx=mini.getContext('2d');
-let W=innerWidth,H=innerHeight,D=Math.min(devicePixelRatio||1,2);
+/* Impostazioni salvate nel browser */
+const SKEY='zeroagar_settings_v1';
+const DEFAULTS={names:true,mass:false,autoZoom:true,botCount:'normal',botSkill:'normal',chat:true,theme:'light',quality:'high',grid:true,particles:true,minimap:true,fps:false,sound:true,volume:60,uiScale:100,touch:'auto',keepAwake:false};
+const S=Object.assign({},DEFAULTS);
+try{Object.assign(S,JSON.parse(localStorage.getItem(SKEY)||'{}'))}catch(_){}
+S.uiScale=isFinite(+S.uiScale)?Math.max(80,Math.min(130,+S.uiScale)):100;
+S.volume=isFinite(+S.volume)?Math.max(0,Math.min(100,+S.volume)):60;
+function qualityDPR(){const d=devicePixelRatio||1;return S.quality==='low'?1:S.quality==='medium'?Math.min(d,1.5):Math.min(d,2)}
+let W=innerWidth,H=innerHeight,D=qualityDPR();
 function resize(){W=innerWidth;H=innerHeight;canvas.width=Math.floor(W*D);canvas.height=Math.floor(H*D);ctx.setTransform(D,0,0,D,0,0)}
 addEventListener('resize',resize);resize();
 const palette=['#ff3f58','#20b7ee','#f2c94c','#7ed321','#9b59ff','#ff7a18','#00c7a7','#e85dff'];
