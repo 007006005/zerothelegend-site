@@ -520,114 +520,6 @@
           pointer-events: none;
       }
 
-      #chat-panel {
-          position: absolute;
-          left: 16px;
-          bottom: 186px;
-          width: 272px;
-          z-index: 14;
-          font-family: 'Inter', sans-serif;
-          display: flex;
-          flex-direction: column;
-          align-items: flex-start;
-      }
-
-      #chat-body {
-          display: none;
-          flex-direction: column;
-          width: 100%;
-          height: 224px;
-          margin-bottom: 8px;
-          border-radius: 12px;
-          border: 1px solid rgba(0, 240, 255, 0.3);
-          background: rgba(4, 8, 22, 0.78);
-          overflow: hidden;
-      }
-
-      #chat-panel.open #chat-body { display: flex; }
-
-      #chat-log {
-          flex: 1;
-          overflow-y: auto;
-          padding: 8px;
-          font-size: 13px;
-          line-height: 1.45;
-          color: rgba(255, 255, 255, 0.86);
-      }
-
-      .chat-msg .who { color: #00f0ff; font-weight: 600; }
-      .chat-msg.me .who { color: #ffe600; }
-      .chat-msg.sys { color: rgba(255, 255, 255, 0.45); font-style: italic; }
-
-      #chat-form { display: flex; gap: 6px; padding: 6px; border-top: 1px solid rgba(0, 240, 255, 0.2); }
-
-      #chat-input {
-          flex: 1;
-          min-width: 0;
-          background: rgba(0, 0, 0, 0.4);
-          border: 1px solid rgba(0, 240, 255, 0.25);
-          border-radius: 8px;
-          color: #fff;
-          padding: 8px;
-          font-size: 14px;
-          outline: none;
-      }
-
-      #chat-send {
-          width: 54px;
-          border-radius: 8px;
-          border: 1px solid rgba(0, 240, 255, 0.4);
-          background: rgba(0, 180, 255, 0.28);
-          color: #fff;
-          font-weight: 700;
-          cursor: pointer;
-      }
-
-      .quick-emotes { display: flex; gap: 5px; padding: 0 6px 6px; }
-
-      .quick-emotes button {
-          flex: 1;
-          padding: 5px 0;
-          background: rgba(0, 0, 0, 0.35);
-          border: 1px solid rgba(0, 240, 255, 0.22);
-          color: #fff;
-          border-radius: 6px;
-          font-size: 16px;
-          cursor: pointer;
-      }
-
-      #chat-toggle {
-          position: relative;
-          width: 108px;
-          height: 54px;
-          border-radius: 14px;
-          border: 1px solid rgba(0, 240, 255, 0.5);
-          background: rgba(6, 14, 34, 0.78);
-          color: #00f0ff;
-          font-family: 'Orbitron', sans-serif;
-          font-size: 13px;
-          font-weight: 700;
-          letter-spacing: 1px;
-          cursor: pointer;
-          -webkit-tap-highlight-color: transparent;
-      }
-
-      #chat-badge {
-          position: absolute;
-          top: -6px;
-          right: -6px;
-          min-width: 22px;
-          height: 22px;
-          border-radius: 11px;
-          background: #ff2d6b;
-          color: #fff;
-          font-size: 12px;
-          line-height: 22px;
-          display: none;
-      }
-
-      #chat-badge.show { display: block; }
-
       .overlay-panel {
           position: absolute;
           inset: 0;
@@ -1700,7 +1592,6 @@
           .ability-chip { min-width: 124px; padding: 5px 8px; font-size: 10px; }
           #notif-feed { top: 132px; right: 10px; width: min(210px, 42vw); font-size: 12px; }
           #minimap-wrap { right: 10px; bottom: 178px; width: clamp(112px, 22vw, 156px); height: clamp(112px, 22vw, 156px); }
-          #chat-panel { left: 10px; bottom: 178px; width: min(250px, 42vw); }
           .action-buttons { bottom: 16px; gap: clamp(6px, 2vw, 14px); }
           .action-btn { width: clamp(78px, 14vw, 106px); height: clamp(78px, 14vw, 106px); font-size: clamp(11px, 2vw, 15px); }
           .action-btn .icon { font-size: clamp(24px, 4vw, 30px); }
@@ -2737,23 +2628,6 @@
         <canvas id="minimap" width="156" height="156"></canvas>
         <div id="minimap-label">MAP</div>
       </div>
-      <div id="chat-panel">
-        <div id="chat-body">
-          <div id="chat-log"></div>
-          <div class="quick-emotes">
-            <button data-emote="gg!">GG</button>
-            <button data-emote="&#128128;">&#128128;</button>
-            <button data-emote="&#128293;">&#128293;</button>
-            <button data-emote="&#129504;">&#129504;</button>
-            <button data-emote="&#128075;">&#128075;</button>
-          </div>
-          <form id="chat-form" autocomplete="off">
-            <input id="chat-input" maxlength="120" placeholder="Global chat..." />
-            <button id="chat-send" type="submit">&#10148;</button>
-          </form>
-        </div>
-        <button id="chat-toggle">CHAT<span id="chat-badge">0</span></button>
-      </div>
       <div class="overlay-panel" id="pause-overlay">
         <h2>PAUSED</h2>
         <div class="key-list">Tap resume or press <b>P</b> to continue.</div>
@@ -2950,10 +2824,8 @@
         const miniCanvas = document.getElementById('minimap');
         const miniCtx = miniCanvas ? miniCanvas.getContext('2d') : null;
         const chatPanel = document.getElementById('chat-panel');
-        const chatToggleBtn = document.getElementById('chat-toggle');
         const chatBadgeEl = document.getElementById('chat-badge');
         const chatLogEl = document.getElementById('chat-log');
-        const chatFormEl = document.getElementById('chat-form');
         const chatInputEl = document.getElementById('chat-input');
         const pauseOverlay = document.getElementById('pause-overlay');
         const helpOverlay = document.getElementById('help-overlay');
@@ -3572,8 +3444,7 @@
           unlock('social', 'Profilo social collegato!');
           finishAuth();
         }
-        function finishAuth() 
-startArenaTimers(){
+        function finishAuth() {
           updateProfileChip();
           renderUserMenu();
           queueSave();
@@ -3815,7 +3686,7 @@ startArenaTimers(){
           if (hudEl) hudEl.style.transform = 'scale(' + (S.hudScale || 1) + ')';
           const showPlayUi = mode === 'play';
           if (minimapWrap) minimapWrap.style.display = showPlayUi && cfg.ui.minimap && S.showMinimap ? 'block' : 'none';
-          if (chatPanel) chatPanel.style.display = showPlayUi && cfg.ui.chat && S.showChat ? 'flex' : 'none';
+          if (arenaChatPanel) arenaChatPanel.style.display = showPlayUi && cfg.ui.chat && S.showChat ? 'block' : 'none';
           if (profileChipEl) profileChipEl.style.display = showPlayUi ? 'flex' : 'none';
           if (notifFeedEl) notifFeedEl.style.display = S.notifications ? 'flex' : 'none';
           const pBtn = document.getElementById('portal-btn');
@@ -4189,7 +4060,7 @@ startArenaTimers(){
             changeNickname(inp ? inp.value : '');
           });
           const lo = el.querySelector('#btn-logout');
-          if (lo) lo.addEventListener('click', (e) => { e.preventDefault(); logoutAccount();arenaLeave(); });
+          if (lo) lo.addEventListener('click', (e) => { e.preventDefault(); logoutAccount(); });
           const rg = el.querySelector('#btn-register');
           if (rg) rg.addEventListener('click', (e) => {
             e.preventDefault();
@@ -5302,6 +5173,7 @@ startArenaTimers(){
         let arenaChatSince = 0;
         let arenaFailureReported = false;
         let remotePlayers = {};
+        let arenaChatPanel = null;
         let arenaChatBody = null;
         let arenaChatInput = null;
         let arenaOnlineCount = null;
@@ -5379,12 +5251,14 @@ startArenaTimers(){
         function setupArenaChat() {
           if (arenaChatBody) return;
           const style = document.createElement('style');
-          style.textContent = '#go-live-chat{position:fixed;right:14px;bottom:14px;width:min(340px,calc(100vw - 28px));z-index:10000;font:13px Arial,sans-serif;color:#eef7ff;background:rgba(10,18,32,.94);border:1px solid rgba(0,240,255,.45);border-radius:10px;box-shadow:0 8px 30px #0008}#go-live-chat header{padding:9px 11px;background:#14253a;border-radius:9px 9px 0 0;font-weight:700;display:flex;justify-content:space-between}#go-live-chat-body{height:150px;overflow:auto;padding:8px}#go-live-chat-body div{margin:4px 0;overflow-wrap:anywhere}#go-live-chat-body b{color:#54dcff}#go-live-chat-status{font-size:11px;opacity:.75;padding:0 8px 6px}#go-live-chat form{display:flex;border-top:1px solid #304156}#go-live-chat input{flex:1;min-width:0;padding:9px;border:0;background:#101b2a;color:#fff;border-radius:0 0 0 9px;outline:none}#go-live-chat button{padding:8px 12px;border:0;background:#08bde8;color:#06131b;font-weight:700;border-radius:0 0 9px 0}@media(max-width:600px){#go-live-chat{bottom:8px;right:8px;width:min(300px,calc(100vw - 16px))}#go-live-chat-body{height:110px}}';
+          style.textContent = '#chat-panel{display:none!important}#go-live-chat{position:fixed;left:14px;right:auto;bottom:14px;width:min(340px,calc(100vw - 28px));z-index:10000;font:13px Arial,sans-serif;color:#eef7ff;background:rgba(10,18,32,.94);border:1px solid rgba(0,240,255,.45);border-radius:10px;box-shadow:0 8px 30px #0008}#go-live-chat header{padding:9px 11px;background:#14253a;border-radius:9px 9px 0 0;font-weight:700;display:flex;justify-content:space-between}#go-live-chat-body{height:150px;overflow:auto;padding:8px}#go-live-chat-body div{margin:4px 0;overflow-wrap:anywhere}#go-live-chat-body b{color:#54dcff}#go-live-chat-status{font-size:11px;opacity:.75;padding:0 8px 6px}#go-live-chat form{display:flex;border-top:1px solid #304156}#go-live-chat input{flex:1;min-width:0;padding:9px;border:0;background:#101b2a;color:#fff;border-radius:0 0 0 9px;outline:none}#go-live-chat button{padding:8px 12px;border:0;background:#08bde8;color:#06131b;font-weight:700;border-radius:0 0 9px 0}@media(max-width:600px){#go-live-chat{bottom:8px;left:8px;right:auto;width:min(300px,calc(100vw - 16px))}#go-live-chat-body{height:110px}}';
           document.head.appendChild(style);
           const panel = document.createElement('section');
           panel.id = 'go-live-chat';
           panel.innerHTML = '<header><span>CHAT ARENA GLOBALE</span><span id="go-live-online">0 online</span></header><div id="go-live-chat-body"></div><div id="go-live-chat-status">Accesso richiesto per giocare online</div><form><input maxlength="200" autocomplete="off" placeholder="Scrivi a tutti i giocatori"><button type="submit">INVIA</button></form>';
           document.body.appendChild(panel);
+          arenaChatPanel = panel;
+          panel.style.display = mode === 'play' && cfg.ui.chat && S.showChat ? 'block' : 'none';
           arenaChatBody = panel.querySelector('#go-live-chat-body');
           arenaChatInput = panel.querySelector('input');
           arenaOnlineCount = panel.querySelector('#go-live-online');
@@ -5513,7 +5387,7 @@ startArenaTimers(){
           }
         }
 
-        function startArenaTimers(); {
+        function startArenaTimers() {
           setupArenaChat();
           if (!profile.serverAuth) {
             if (arenaChatInput) arenaChatInput.disabled = true;
@@ -7253,10 +7127,6 @@ startArenaTimers(){
         window.addEventListener('pagehide', arenaLeave, { once: true });
 
         if (mode === 'play') {
-          addChatMsg('', 'Arena channel joined — press C or T to chat.', 'sys');
-          addChatMsg('', 'ESC = menu utente · /help per i comandi chat.', 'sys');
-          addChatMsg(randomRivalName(), 'fresh meat just spawned 😏');
-          setChatOpen(false);
           notify('Press H for the control list', '#00f0ff');
         }
 
@@ -7363,8 +7233,7 @@ startArenaTimers(){
         window.addEventListener('keydown', (e) => {
           if (isTyping()) {
             if (e.code === 'Escape') {
-              if (chatInputEl) chatInputEl.blur();
-              setChatOpen(false);
+              document.activeElement.blur();
             }
             return;
           }
@@ -7392,8 +7261,7 @@ startArenaTimers(){
 
           if (e.code === 'KeyT') {
             e.preventDefault();
-            setChatOpen(true);
-            setTimeout(() => { if (chatInputEl) chatInputEl.focus(); }, 40);
+            setTimeout(() => { if (arenaChatInput && !arenaChatInput.disabled) arenaChatInput.focus(); }, 40);
             return;
           }
 
@@ -7424,8 +7292,6 @@ startArenaTimers(){
               break;
             case 'KeyH':
               e.preventDefault(); toggleHelp(); break;
-            case 'KeyC':
-              e.preventDefault(); setChatOpen(!chatOpen); break;
             case 'KeyM':
               S.mute = !S.mute;
               applySettings();
@@ -7476,28 +7342,6 @@ startArenaTimers(){
           zoomBy(e.deltaY > 0 ? 0.9 : 1.11);
         }, { passive: false });
 
-        // Chat wiring
-        if (chatToggleBtn) {
-          chatToggleBtn.addEventListener('click', (e) => {
-            e.preventDefault();
-            setChatOpen(!chatOpen);
-          });
-        }
-        if (chatFormEl) {
-          chatFormEl.addEventListener('submit', (e) => {
-            e.preventDefault();
-            sendChat();
-          });
-        }
-        const emoteBtns = document.querySelectorAll('.quick-emotes button');
-        emoteBtns.forEach((b) => {
-          b.addEventListener('click', (e) => {
-            e.preventDefault();
-            if (!chatInputEl) return;
-            chatInputEl.value = b.dataset.emote || b.textContent;
-            sendChat();
-          });
-        });
         if (resumeBtn) resumeBtn.addEventListener('click', (e) => { e.preventDefault(); togglePause(false); });
         if (helpCloseBtn) helpCloseBtn.addEventListener('click', (e) => { e.preventDefault(); toggleHelp(false); });
 
@@ -11842,5 +11686,6 @@ startArenaTimers(){
       })();
     </script>
     <div id="game-error-box" style="display:none;position:fixed;left:50%;top:16px;transform:translateX(-50%);z-index:99999;max-width:min(92vw,900px);padding:12px 16px;border:1px solid #ff356e;border-radius:10px;background:rgba(20,0,12,.94);color:#fff;font:600 13px/1.4 Arial,sans-serif;box-shadow:0 0 24px rgba(255,0,90,.35)"></div>
+  <script src="/assets/js/global-arena-chat.js" defer></script>
   </body>
 </html>
