@@ -116,7 +116,8 @@ function clamp(v,a,b){return Math.max(a,Math.min(b,v))}
 function d2(a,b){return Math.hypot(a.x-b.x,a.y-b.y)}
 function now(){return performance.now()}
 function toast(s){const e=document.getElementById('toast');e.textContent=s;e.style.display='block';clearTimeout(toast.t);toast.t=setTimeout(()=>e.style.display='none',1800)}
-function massToRadius(m){return Math.max(10,Math.sqrt(Math.max(10,m)))}
+/* Raggio visibile: cresce a ogni boccone di cibo (niente più minimo fisso che bloccava la crescita) */
+function massToRadius(m){return 12+Math.sqrt(Math.max(10,m))*2.2}
 
 /* Richiesta con timeout: evita che una chiamata bloccata tenga occupato il client */
 async function fetchJSON(url,options={},timeoutMs=8000){
@@ -197,9 +198,9 @@ function updateLeaders(){
   document.getElementById('leaders').innerHTML=vals.slice(0,10).map((v,i)=>`<div class="row ${v.me?'me':''}"><span>${i+1}. ${esc(v.username||'')}</span><b>${Math.floor(+v.score||0)}</b></div>`).join('');
 }
 
-function food(){return{x:rand(50,state.world-50),y:rand(50,state.world-50),r:rand(3,6),m:5,c:palette[(Math.random()*palette.length)|0]}}
+function food(){return{x:rand(50,state.world-50),y:rand(50,state.world-50),r:rand(3,6),m:8,c:palette[(Math.random()*palette.length)|0]}}
 function virus(){return{x:rand(500,state.world-500),y:rand(500,state.world-500),r:48,m:100,spin:rand(0,Math.PI*2)}}
-function createBot(i){const team=state.mode==='ffa'?null:i%3;const m=rand(40,240);return{x:rand(300,state.world-300),y:rand(300,state.world-300),r:massToRadius(m),m,vx:rand(-35,35),vy:rand(-35,35),name:names[i%names.length],team,angle:rand(0,Math.PI*2),think:0,color:team==null?palette[i%palette.length]:TEAM_COLORS[team],alive:true}}
+function createBot(i){const team=state.mode==='ffa'?null:i%3;const m=rand(25,150);return{x:rand(300,state.world-300),y:rand(300,state.world-300),r:massToRadius(m),m,vx:rand(-35,35),vy:rand(-35,35),name:names[i%names.length],team,angle:rand(0,Math.PI*2),think:0,color:team==null?palette[i%palette.length]:TEAM_COLORS[team],alive:true}}
 function makeCell(x,y,m,color,name,team=null,player=false){return{x,y,m,r:massToRadius(m),vx:0,vy:0,merge:0,color,name,team,player}}
 function resetWorld(){
   state.foods=[];state.ejected=[];state.viruses=[];state.bots=[];
@@ -406,7 +407,7 @@ function update(dt){
       const d=d2(b,c);
       if(canEat(c,b)&&d<c.r*.92){
         c.m+=b.m;c.r=massToRadius(c.m);state.kills++;
-        b.x=rand(400,5600);b.y=rand(400,5600);b.m=rand(40,220);b.r=massToRadius(b.m);
+        b.x=rand(400,5600);b.y=rand(400,5600);b.m=rand(25,150);b.r=massToRadius(b.m);
       }else if(canEat(b,c)&&d<b.r*.92){die('Un rivale più grande ti ha divorato');return}
     }
   }
@@ -417,7 +418,7 @@ function update(dt){
   state.best=Math.max(state.best,state.score);
   state.time+=dt;
   state.camera.x=first.x;state.camera.y=first.y;
-  state.camera.zoom=clamp(1/Math.pow(Math.max(25,state.score)/25,.22),.33,1.15);
+  state.camera.zoom=clamp(1/Math.pow(Math.max(25,state.score)/25,.15),.28,1.15);
   if(++state.leaderTick%20===0){updateLeaders()}
   if(state.leaderTick%300===0)refreshLeaderboard().then(updateLeaders);
   saveProgress();
@@ -498,7 +499,7 @@ function goPortal(){saveProgress(true);location.href=PORTAL_URL}
 addEventListener('mousemove',e=>{state.mouse.x=e.clientX;state.mouse.y=e.clientY});
 addEventListener('wheel',e=>{
   if(!state.playing)return;e.preventDefault();
-  state.camera.zoom=clamp(state.camera.zoom*(e.deltaY<0?1.08:.92),.33,1.3);
+  state.camera.zoom=clamp(state.camera.zoom*(e.deltaY<0?1.08:.92),.28,1.3);
 },{passive:false});
 addEventListener('keydown',e=>{
   if(e.code==='Space'){e.preventDefault();split()}
