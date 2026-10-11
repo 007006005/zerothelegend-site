@@ -463,14 +463,9 @@ function draw(){
 for(const c of state.cells){
   for(let i=state.foods.length-1;i>=0;i--){
     const f=state.foods[i];
-    if(d2(c,f)<c.r){
-      c.m+=f.m*3;          // ogni cibo vale 3 volte di più
-      c.r=massToRadius(c.m);
-      c.pulse=1;           // attiva l'effetto visivo
-      state.foods[i]=food();
-      state.foodEaten++;
-    }
+    if(d2(c,f)<c.r){c.m+=f.m;c.r=massToRadius(c.m);state.foods[i]=food();state.foodEaten++}
   }
+}
   c.pulse=Math.max(0,(c.pulse||0)-0.05);
 }
   if(state.minimap){
