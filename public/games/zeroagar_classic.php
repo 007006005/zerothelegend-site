@@ -624,7 +624,8 @@ function updateLeaders(){
 function food(){return{x:rand(50,state.world-50),y:rand(50,state.world-50),r:rand(3,6),m:8,c:palette[(Math.random()*palette.length)|0]}}
 function virus(){return{x:rand(500,state.world-500),y:rand(500,state.world-500),r:48,m:100,spin:rand(0,Math.PI*2)}}
 function createBot(i){const team=state.mode==='ffa'?null:i%3;const m=rand(25,150);return{x:rand(300,state.world-300),y:rand(300,state.world-300),r:massToRadius(m),m,vx:rand(-35,35),vy:rand(-35,35),name:names[i%names.length],team,angle:rand(0,Math.PI*2),think:0,color:team==null?palette[i%palette.length]:TEAM_COLORS[team],alive:true}}
-function makeCell(x,y,m,color,name,team=null,player=false){return{x,y,m,r:massToRadius(m),vx:0,vy:0,merge:0,color,name,team,player}}
+/* bx/by = spinta dello split (decade nel tempo), vx/vy = movimento verso il cursore */
+function makeCell(x,y,m,color,name,team=null,player=false){return{x,y,m,r:massToRadius(m),vx:0,vy:0,bx:0,by:0,merge:0,color,name,team,player}}
 function resetWorld(){
   state.foods=[];state.ejected=[];state.viruses=[];state.bots=[];
   state.pickups=[];for(let i=0;i<10;i++)state.pickups.push(spawnPickup());
@@ -751,16 +752,48 @@ function die(reason='Divorato'){
   saveProgress(true);refreshLeaderboard().then(updateLeaders);updateLeaders();
 }
 function canEat(a,b){return a.m>b.m*1.10&&a.r>b.r*1.08}
+
+/* ----- Split in stile agar.io ----- */
+const MAX_CELLS=16,MIN_SPLIT_MASS=36,SPLIT_SPEED=1050,SPLIT_DECAY=3;
+/* Timer di riunione: 30s base + 2,33% della massa della cellula */
+function mergeTime(m){return 30+m*0.0233}
+function worldMouse(){const z=state.camera.zoom;return{x:state.camera.x+(state.mouse.x-W/2)/z,y:state.camera.y+(state.mouse.y-H/2)/z}}
 function split(){
-  if(!state.playing||state.paused||state.cells.length>=16)return;
-  const additions=[];
-  const ang=Math.atan2(state.mouse.y-H/2,state.mouse.x-W/2);
-  for(const c of state.cells.slice()){
-    if(c.m<36||state.cells.length+additions.length>=16)continue;
-    const half=c.m/2;c.m=half;c.r=massToRadius(half);c.merge=10;
-    additions.push(Object.assign({},c,{x:c.x+Math.cos(ang)*(c.r+18),y:c.y+Math.sin(ang)*(c.r+18),m:half,r:massToRadius(half),vx:Math.cos(ang)*650,vy:Math.sin(ang)*650,merge:10,player:true}));
+  if(!state.playing||state.paused)return;
+  const wm=worldMouse();
+  /* si dividono prima le cellule più grandi; il limite è 16 cellule totali */
+  const list=state.cells.filter(c=>c.m>=MIN_SPLIT_MASS).sort((a,b)=>b.m-a.m);
+  let n=state.cells.length,did=false;
+  for(const c of list){
+    if(n>=MAX_CELLS)break;
+    let dx=wm.x-c.x,dy=wm.y-c.y,l=Math.hypot(dx,dy);
+    if(l<1){dx=1;dy=0;l=1}
+    dx/=l;dy/=l;
+    const half=c.m/2;
+    c.m=half;c.r=massToRadius(half);
+    const t=mergeTime(half);c.merge=t;
+    const nc=makeCell(c.x+dx*c.r*.5,c.y+dy*c.r*.5,half,c.color,c.name,c.team,true);
+    nc.vx=c.vx;nc.vy=c.vy;
+    nc.bx=dx*SPLIT_SPEED;nc.by=dy*SPLIT_SPEED;
+    nc.merge=t;
+    state.cells.push(nc);n++;did=true;
   }
-  if(additions.length){state.cells.push(...additions);toast('SPLIT')}
+  if(did){toast('SPLIT');beep('pickup')}
+}
+/* Le cellule dello stesso giocatore si respingono finché il timer non è scaduto */
+function separateCells(dt){
+  const cs=state.cells;
+  for(let i=0;i<cs.length;i++)for(let j=i+1;j<cs.length;j++){
+    const a=cs[i],b=cs[j];
+    if(a.merge<=0&&b.merge<=0)continue;
+    let dx=b.x-a.x,dy=b.y-a.y,d=Math.hypot(dx,dy);
+    const min=a.r+b.r;
+    if(d>=min)continue;
+    if(d<.01){const g=Math.random()*6.28;dx=Math.cos(g);dy=Math.sin(g);d=1}
+    const push=(min-d)*Math.min(1,dt*12),nx=dx/d,ny=dy/d,tm=a.m+b.m;
+    a.x=clamp(a.x-nx*push*(b.m/tm),a.r,state.world-a.r);a.y=clamp(a.y-ny*push*(b.m/tm),a.r,state.world-a.r);
+    b.x=clamp(b.x+nx*push*(a.m/tm),b.r,state.world-b.r);b.y=clamp(b.y+ny*push*(a.m/tm),b.r,state.world-b.r);
+  }
 }
 function eject(){
   if(!state.playing||state.paused)return;
@@ -775,11 +808,12 @@ function handleVirusHit(c,v){
   if(c.m<100)return;
   const n=Math.min(6,Math.floor(c.m/90));
   c.m*=0.9;c.r=massToRadius(c.m);
+  c.merge=Math.max(c.merge,mergeTime(c.m));
   const ang=Math.atan2(c.y-v.y,c.x-v.x);
-  for(let i=0;i<n&&state.cells.length<16;i++){
+  for(let i=0;i<n&&state.cells.length<MAX_CELLS;i++){
     const a=ang+(i-(n-1)/2)*0.22;
     const nc=makeCell(c.x+Math.cos(a)*45,c.y+Math.sin(a)*45,Math.max(20,c.m/n*0.85),c.color,c.name,c.team,true);
-    nc.vx=Math.cos(a)*420;nc.vy=Math.sin(a)*420;state.cells.push(nc);
+    nc.bx=Math.cos(a)*420;nc.by=Math.sin(a)*420;nc.merge=mergeTime(nc.m);state.cells.push(nc);
   }
   v.x=rand(500,state.world-500);v.y=rand(500,state.world-500);
   toast('VIRUS!');
@@ -810,14 +844,24 @@ function update(dt){
   const first=state.cells[0];if(!first)return;
   const ax=(arrows.ArrowRight?1:0)-(arrows.ArrowLeft?1:0),ay=(arrows.ArrowDown?1:0)-(arrows.ArrowUp?1:0);
   if(ax||ay){state.mouse.x=W/2+ax*300;state.mouse.y=H/2+ay*300}
-  const dx=state.mouse.x-W/2,dy=state.mouse.y-H/2,len=Math.hypot(dx,dy)||1;
+  const wm=worldMouse();
+  const dec=Math.exp(-SPLIT_DECAY*dt);
   for(const c of state.cells){
-    const localSpeed=clamp(520/Math.sqrt(c.m)*35,45,300)*(state.fx.speed>0?1.6:1);
-    c.vx+=(dx/len*localSpeed-c.vx)*Math.min(1,dt*6);
-    c.vy+=(dy/len*localSpeed-c.vy)*Math.min(1,dt*6);
-    c.x=clamp(c.x+c.vx*dt,c.r,state.world-c.r);c.y=clamp(c.y+c.vy*dt,c.r,state.world-c.r);
+    /* ogni cellula punta al cursore, rallentando quando ci arriva sopra */
+    const dx=wm.x-c.x,dy=wm.y-c.y,dist=Math.hypot(dx,dy)||1;
+    const k=Math.min(1,dist/Math.max(40,c.r));
+    const localSpeed=clamp(520/Math.sqrt(c.m)*35,45,300)*(state.fx.speed>0?1.6:1)*k;
+    c.vx+=(dx/dist*localSpeed-c.vx)*Math.min(1,dt*6);
+    c.vy+=(dy/dist*localSpeed-c.vy)*Math.min(1,dt*6);
+    /* la spinta dello split decade in modo esponenziale, indipendente dallo sterzo */
+    c.bx*=dec;c.by*=dec;
+    if(Math.abs(c.bx)<2)c.bx=0;
+    if(Math.abs(c.by)<2)c.by=0;
+    c.x=clamp(c.x+(c.vx+c.bx)*dt,c.r,state.world-c.r);
+    c.y=clamp(c.y+(c.vy+c.by)*dt,c.r,state.world-c.r);
     c.merge=Math.max(0,c.merge-dt);
   }
+  separateCells(dt);
   for(let i=state.ejected.length-1;i>=0;i--){
     const e=state.ejected[i];e.life-=dt;
     e.vx*=Math.pow(.03,dt);e.vy*=Math.pow(.03,dt);
@@ -856,7 +900,10 @@ function update(dt){
   state.score=state.cells.reduce((s,c)=>s+c.m,0);
   state.best=Math.max(state.best,state.score);
   state.time+=dt;
-  state.camera.x=first.x;state.camera.y=first.y;
+  /* la camera segue il centro di tutte le cellule */
+  let cx=0,cy=0;for(const c of state.cells){cx+=c.x;cy+=c.y}
+  state.camera.x+=(cx/state.cells.length-state.camera.x)*Math.min(1,dt*10);
+  state.camera.y+=(cy/state.cells.length-state.camera.y)*Math.min(1,dt*10);
   if(S.autoZoom)state.camera.zoom=clamp(1/Math.pow(Math.max(25,state.score)/25,.15),.28,1.15);
   if(++state.leaderTick%20===0){updateLeaders()}
   if(state.leaderTick%6===0)renderPowerups();
@@ -864,18 +911,18 @@ function update(dt){
   saveProgress();
   applyProfileUI();
 }
+/* Le cellule dello stesso giocatore si fondono quando il timer è scaduto e si toccano */
 function mergeCells(){
   for(let i=state.cells.length-1;i>=0;i--){
     for(let j=i-1;j>=0;j--){
       const a=state.cells[i],b=state.cells[j];
-      if(!a||!b)continue;
-      if(a.merge>0||b.merge>0)continue;
-      if(state.mode!=='ffa'&&a.team!==b.team)continue;
-      if(d2(a,b)<Math.min(a.r,b.r)*.55){
-        const big=a.m>=b.m?a:b,small=big===a?b:a;
-        if(state.mode==='ffa'&&!canEat(big,small))continue;
+      if(!a||!b||a.merge>0||b.merge>0)continue;
+      const big=a.m>=b.m?a:b,small=big===a?b:a;
+      if(d2(a,b)<big.r*.65){
         big.m+=small.m;big.r=massToRadius(big.m);
+        big.bx+=small.bx;big.by+=small.by;
         state.cells.splice(state.cells.indexOf(small),1);
+        break;
       }
     }
   }
@@ -903,7 +950,9 @@ function draw(){
     const p=screenPoint(b.x,b.y);ctx.beginPath();ctx.arc(p.x,p.y,b.r*z,0,Math.PI*2);ctx.fillStyle=b.color;ctx.fill();ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.stroke();
     if(b.r*z>20){ctx.fillStyle='#fff';ctx.font='bold 12px Arial';ctx.textAlign='center';if(S.names)ctx.fillText(b.name,p.x,p.y+(S.mass?-1:4));if(S.mass)ctx.fillText(Math.floor(b.m),p.x,p.y+(S.names?13:4))}
   }
-  for(const c of state.cells){
+  /* le cellule più piccole vengono disegnate sotto quelle grandi */
+  const drawCells=state.cells.slice().sort((a,b)=>a.m-b.m);
+  for(const c of drawCells){
     const p=screenPoint(c.x,c.y);ctx.beginPath();ctx.arc(p.x,p.y,c.r*z,0,Math.PI*2);ctx.fillStyle=c.color;ctx.fill();ctx.strokeStyle='#fff';ctx.lineWidth=3;ctx.stroke();
     if(c.r*z>22){ctx.fillStyle='#fff';ctx.font='bold 13px Arial';ctx.textAlign='center';if(S.names)ctx.fillText(state.nick,p.x,p.y+(S.mass?-1:4));if(S.mass)ctx.fillText(Math.floor(c.m),p.x,p.y+(S.names?14:4))}
     drawCellFx(c,p,z);
