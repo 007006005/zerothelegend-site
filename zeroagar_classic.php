@@ -66,6 +66,7 @@ body.dark .chat-msg b,body.dark .row.me{color:#5cc8ff}
 body.dark .pu{background:rgba(28,33,41,.95);color:#e8ecf1}
 body.dark .sh-head,body.dark .sh-tabs,body.dark .opt,body.dark .sh-foot{border-color:rgba(255,255,255,.1)}
 body.dark .sw{background:#4a5361}body.dark .sw.on{background:#58d100}
+#ecoBanner{position:absolute;left:50%;top:160px;transform:translateX(-50%);padding:6px 14px;font-size:12px;font-weight:700;max-width:90vw;text-align:center;pointer-events:none;z-index:9;zoom:var(--ui,1)}
 @media(pointer:coarse){#touch{display:block}}
 </style>
 </head>
@@ -84,12 +85,17 @@ body.dark .sw{background:#4a5361}body.dark .sw.on{background:#58d100}
         <button data-um="fullscreen">⛶ Schermo intero</button>
         <button data-um="save">💾 Salva progressi</button>
         <button data-um="refresh">🔄 Aggiorna account</button>
+        <button data-um="shop">🛒 Shop Zero Coin</button>
+        <button data-um="pass">🎟️ Zero Pass</button>
+        <button data-um="skins">🎨 Collezione e skin</button>
+        <button data-um="admin" id="umAdmin" style="display:none">🛠 Amministrazione</button>
         <button data-um="portal">🏠 Portale</button>
       </div>
     </div>
     <div id="leader" class="panel"><div class="leaderTitle">Classifica</div><div id="leaders"></div></div>
   </div>
   <div id="tips">Mouse / dito = movimento · tasti personalizzabili in Impostazioni › Controlli · raccogli i bonus ⚡🛡️🧲✨</div>
+  <div id="ecoBanner" class="panel" style="display:none"></div>
   <div id="powerups"></div>
   <div id="feed"></div>
   <div id="pauseBox" class="panel">⏸ PAUSA<div class="help" id="pauseHelp">premi P per riprendere</div></div>
@@ -101,6 +107,10 @@ body.dark .sw{background:#4a5361}body.dark .sw.on{background:#58d100}
       <button class="action" id="refreshProfile">AGGIORNA</button>
       <button class="action" id="saveNow">SALVA PROGRESSI</button>
       <button class="action" id="profileBtn">PROFILO</button>
+      <div id="coinInfo" class="help" style="margin:6px 0"></div>
+      <button class="action" id="shopBtn">🛒 SHOP</button>
+      <button class="action" id="passBtn">🎟️ ZERO PASS</button>
+      <button class="action" id="skinsBtn">🎨 COLLEZIONE</button>
       <button class="action" id="settingsBtn">IMPOSTAZIONI</button>
       <button class="action gray" id="portalBtn">PORTALE</button>
     </div>
@@ -177,6 +187,7 @@ const state={
   pickups:[],fx:{speed:0,shield:0,magnet:0,double:0},combo:0,comboT:0,bestCombo:0,particles:[],feed:[],runTime:0
 };
 state.zoomMul=1;state.feedAcc=0;
+state.eco=null;state.allies=[];state.remoteSkins={};state.rewarded=false;state.skinTimer=null;
 function esc(s){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
 function rand(a,b){return a+Math.random()*(b-a)}
 function clamp(v,a,b){return Math.max(a,Math.min(b,v))}
@@ -250,9 +261,9 @@ function updateExtras(dt){
     for(const c of state.cells){
       if(d2(c,k)<c.r+k.r){
         const def=PICKUPS[k.type];
-        state.fx[k.type]=def.dur;
+        state.fx[k.type]=def.dur*durMul();
         toast(def.icon+' '+def.name+'!');
-        addFeed(def.icon+' '+def.name+' attivo ('+def.dur+'s)');
+        addFeed(def.icon+' '+def.name+' attivo ('+Math.round(def.dur*durMul())+'s)');
         burst(k.x,k.y,def.color,14,220);beep('pickup');
         state.pickups[i]=spawnPickup();
         break;
@@ -613,6 +624,9 @@ function renderSheet(){
   if(sheetMode==='settings')renderSettings();
   else if(sheetMode==='profile')renderProfile();
   else if(sheetMode==='pause')renderPauseMenu();
+  else if(sheetMode==='shop')renderShop();
+  else if(sheetMode==='pass')renderPass();
+  else if(sheetMode==='skins')renderCollection();
 }
 function sheetHead(title){
   sheet.innerHTML='';
@@ -715,6 +729,10 @@ function userAction(a){
   else if(a==='fullscreen')toggleFullscreen();
   else if(a==='save'){saveProgress(true);toast('Salvataggio in corso…')}
   else if(a==='refresh')loadAccount();
+  else if(a==='shop')openSheet('shop');
+  else if(a==='pass')openSheet('pass');
+  else if(a==='skins')openSheet('skins');
+  else if(a==='admin'){endGameReward(true);saveProgress(true);location.href='zeroagar_admin.php'}
   else if(a==='portal')goPortal();
 }
 document.getElementById('profile').addEventListener('click',e=>{
@@ -780,6 +798,7 @@ async function loadAccount(){
     document.getElementById('loginInfo').innerHTML='<b>Account collegato</b><br>'+esc(state.nick)+'<br>Progressi salvati nel database.';
     document.getElementById('nick').value=state.nick;
     applyProfileUI();
+    await loadEco();
     await refreshLeaderboard();
     if(state.playing)arenaJoin();
   }catch(e){
@@ -822,7 +841,7 @@ function makeCell(x,y,m,color,name,team=null,player=false){return{x,y,m,r:massTo
 function resetWorld(){
   state.foods=[];state.ejected=[];state.viruses=[];state.bots=[];
   state.pickups=[];for(let i=0;i<10;i++)state.pickups.push(spawnPickup());
-  for(let i=0;i<700;i++)state.foods.push(food());
+  for(let i=0;i<foodTarget();i++)state.foods.push(food());
   const vc=state.mode==='experimental'?14:10;for(let i=0;i<vc;i++)state.viruses.push(virus());
   const bc=({low:10,normal:18,high:30}[S.botCount]||18)+(state.mode==='teams'?6:0);for(let i=0;i<bc;i++)state.bots.push(createBot(i));
   if(state.mode==='party'){state.partyCode='ZA-'+Math.random().toString(36).slice(2,7).toUpperCase();toast('Party code: '+state.partyCode)}
@@ -883,14 +902,16 @@ async function arenaLeave(){
 }
 async function sendArenaChat(text){
   text=String(text||'').trim();if(!text||!state.arenaJoined)return;
+  if(!chatAllowed(text))return;
   try{const r=await arenaCall('chat',{text});if(r?.success)await arenaSync(true)}
   catch(e){toast(e.message||'Chat non disponibile')}
 }
-function stopArenaTimers(){clearInterval(state.arenaTimer);clearInterval(state.arenaUpdateTimer);state.arenaTimer=null;state.arenaUpdateTimer=null}
+function stopArenaTimers(){clearInterval(state.arenaTimer);clearInterval(state.arenaUpdateTimer);clearInterval(state.skinTimer);state.arenaTimer=null;state.arenaUpdateTimer=null;state.skinTimer=null}
 function startArenaTimers(){
   stopArenaTimers();
   state.arenaTimer=setInterval(()=>arenaSync(),350);
   state.arenaUpdateTimer=setInterval(()=>arenaUpdate(),120);
+  state.skinTimer=setInterval(fetchRemoteSkins,6000);
 }
 function drawRemotePlayers(){
   const z=state.camera.zoom;
@@ -898,8 +919,7 @@ function drawRemotePlayers(){
     for(const c of (p.cells||[])){
       const q=screenPoint(c.x,c.y);
       const r=Math.max(5,Number(c.r||massToRadius(c.m||10)))*z;
-      ctx.beginPath();ctx.arc(q.x,q.y,r,0,Math.PI*2);ctx.fillStyle=c.color||p.color||'#ef476f';ctx.fill();
-      ctx.strokeStyle='#fff';ctx.lineWidth=3;ctx.stroke();
+      drawSkinCell(q,r,c.color||p.color||'#ef476f',remoteSkin(p));
       if(S.names&&r>22){ctx.fillStyle='#fff';ctx.font='bold 13px Arial';ctx.textAlign='center';ctx.fillText(p.username,q.x,q.y+4)}
     }
   }
@@ -907,15 +927,16 @@ function drawRemotePlayers(){
 
 /* ----- Partita ----- */
 function startGame(){
+  if(ecoP()&&ecoP().banned){toast('Account sospeso'+(ecoP().ban_reason?': '+ecoP().ban_reason:''));return}
   state.nick=(state.profile?.username||state.profile?.name||document.getElementById('nick').value||'ZeroPlayer').trim().slice(0,20)||'ZeroPlayer';
-  state.playing=true;state.spectating=false;state.gameOver=false;state.paused=false;
-  state.score=25;state.kills=0;state.foodEaten=0;
-  state.fx={speed:0,shield:0,magnet:0,double:0};state.combo=0;state.comboT=0;state.bestCombo=0;state.runTime=0;state.particles=[];state.feed=[];
+  state.playing=true;state.spectating=false;state.gameOver=false;state.paused=false;state.rewarded=false;
+  state.score=startMass();state.kills=0;state.foodEaten=0;
+  state.fx={speed:0,shield:2*upLvl('shield'),magnet:0,double:0};state.combo=0;state.comboT=0;state.bestCombo=0;state.runTime=0;state.particles=[];state.feed=[];
   renderFeed();renderPowerups();
   document.getElementById('pauseBox').style.display='none';
   const spawn={x:rand(1300,4700),y:rand(1300,4700)};
   state.camera={x:spawn.x,y:spawn.y,zoom:1};state.zoomMul=1;
-  state.cells=[makeCell(spawn.x,spawn.y,25,playerSkinColor(),state.nick,state.mode==='teams'?Math.floor(Math.random()*3):null,true)];
+  state.cells=[makeCell(spawn.x,spawn.y,startMass(),playerSkinColor(),state.nick,state.mode==='teams'?Math.floor(Math.random()*3):null,true)];
   resetWorld();
   document.getElementById('menu').style.display='none';
   document.getElementById('death').style.display='none';
@@ -925,7 +946,7 @@ function startGame(){
   state.lastFrame=now();state.lastSave=Date.now();
   cancelAnimationFrame(state.rafId);
   state.rafId=requestAnimationFrame(loop);
-  arenaJoin();startArenaTimers();
+  arenaJoin();startArenaTimers();spawnAllies();
   toast('Partita iniziata · '+state.mode.toUpperCase());
 }
 function respawn(){startGame()}
@@ -943,14 +964,14 @@ function die(reason='Divorato'){
   document.getElementById('tips').style.display='none';
   stopArenaTimers();arenaLeave();beep('death');vib([60,40,90]);
   if(S.autoRespawn)setTimeout(()=>{if(state.gameOver&&!state.playing&&!state.spectating)respawn()},2500);
-  saveProgress(true);refreshLeaderboard().then(updateLeaders);updateLeaders();
+  saveProgress(true);refreshLeaderboard().then(updateLeaders);updateLeaders();endGameReward(false);
 }
 function canEat(a,b){return a.m>b.m*1.10&&a.r>b.r*1.08}
 
 /* ----- Split in stile agar.io ----- */
 const MAX_CELLS=16,MIN_SPLIT_MASS=36,SPLIT_SPEED=1050,SPLIT_DECAY=3;
-/* Timer di riunione: 30s base + 2,33% della massa della cellula */
-function mergeTime(m){return 30+m*0.0233}
+/* Timer di riunione: 30s base + 2,33% della massa della cellula (ridotto dal potenziamento "Fusione rapida") */
+function mergeTime(m){return(30+m*0.0233)*(1-.04*upLvl('merge'))}
 function worldMouse(){const z=state.camera.zoom;return{x:state.camera.x+(state.mouse.x-W/2)/z,y:state.camera.y+(state.mouse.y-H/2)/z}}
 function split(){
   if(!state.playing||state.paused)return;
@@ -1044,7 +1065,7 @@ function update(dt){
     /* ogni cellula punta al cursore, rallentando quando ci arriva sopra */
     const dx=wm.x-c.x,dy=wm.y-c.y,dist=Math.hypot(dx,dy)||1;
     const k=Math.min(1,dist/Math.max(DEAD_ZONE[S.deadZone]||40,c.r));
-    const localSpeed=clamp(520/Math.sqrt(c.m)*35,45,300)*(state.fx.speed>0?1.6:1)*k*(arrows.stop?0:1);
+    const localSpeed=clamp(520/Math.sqrt(c.m)*35,45,300)*(state.fx.speed>0?1.6:1)*speedMul()*k*(arrows.stop?0:1);
     c.vx+=(dx/dist*localSpeed-c.vx)*Math.min(1,dt*6);
     c.vy+=(dy/dist*localSpeed-c.vy)*Math.min(1,dt*6);
     /* la spinta dello split decade in modo esponenziale, indipendente dallo sterzo */
@@ -1066,7 +1087,7 @@ function update(dt){
     e.x=clamp(e.x+e.vx*dt,e.r,state.world-e.r);e.y=clamp(e.y+e.vy*dt,e.r,state.world-e.r);
     if(e.life<=0)state.ejected.splice(i,1);
   }
-  updateBots(dt);
+  updateBots(dt);updateAllies(dt);passiveMagnet(dt);
   for(const c of state.cells){
     for(let i=state.foods.length-1;i>=0;i--){
       const f=state.foods[i];
@@ -1151,10 +1172,11 @@ function draw(){
     const p=screenPoint(b.x,b.y);ctx.beginPath();ctx.arc(p.x,p.y,b.r*z,0,Math.PI*2);ctx.fillStyle=b.color;ctx.fill();ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.stroke();
     if(b.r*z>20){ctx.fillStyle='#fff';ctx.font='bold 12px Arial';ctx.textAlign='center';if(S.names)ctx.fillText(b.name,p.x,p.y+(S.mass?-1:4));if(S.mass)ctx.fillText(Math.floor(b.m),p.x,p.y+(S.names?13:4))}
   }
+  drawAllies();
   /* le cellule più piccole vengono disegnate sotto quelle grandi */
   const drawCells=state.cells.slice().sort((a,b)=>a.m-b.m);
   for(const c of drawCells){
-    const p=screenPoint(c.x,c.y);ctx.beginPath();ctx.arc(p.x,p.y,c.r*z,0,Math.PI*2);ctx.fillStyle=c.color;ctx.fill();ctx.strokeStyle='#fff';ctx.lineWidth=S.borderWidth||3;ctx.stroke();
+    const p=screenPoint(c.x,c.y);drawSkinCell(p,c.r*z,c.color,mySkin());
     if(c.r*z>22){ctx.fillStyle='#fff';ctx.font='bold 13px Arial';ctx.textAlign='center';if(S.names)ctx.fillText(state.nick,p.x,p.y+(S.mass?-1:4));if(S.mass)ctx.fillText(Math.floor(c.m),p.x,p.y+(S.names?14:4))}
     drawCellFx(c,p,z);drawCellExtras(c,p,z);
   }
@@ -1184,7 +1206,7 @@ function spectate(){
   requestAnimationFrame(tick);
 }
 function help(){toast('Split '+keyLabel(S.keys.split)+' · Massa '+keyLabel(S.keys.eject)+' · Pausa '+keyLabel(S.keys.pause)+' · Mappa '+keyLabel(S.keys.minimap)+' · Menu '+keyLabel(S.keys.menu)+' · tasti modificabili in Impostazioni')}
-function goPortal(){saveProgress(true);location.href=PORTAL_URL}
+function goPortal(){if(state.playing)endGameReward(true);saveProgress(true);location.href=PORTAL_URL}
 
 addEventListener('mousemove',e=>{state.mouse.x=e.clientX;state.mouse.y=e.clientY});
 addEventListener('wheel',e=>{
@@ -1250,6 +1272,272 @@ document.querySelectorAll('.chat-emotes [data-emote]').forEach(b=>b.addEventList
 addEventListener('pagehide',()=>{
   try{navigator.sendBeacon(ARENA_API,new Blob([JSON.stringify({action:'leave'})],{type:'application/json'}))}catch(e){}
 });
+
+/* ===== Economia ZeroAgar: Zero Coin, shop, potenziamenti, skin, bot, Zero Pass ===== */
+const ECON='zeroagar_economy.php';
+async function econ(action,payload,form){
+  const o={method:'POST',credentials:'same-origin',headers:{'X-Requested-With':'ZeroAgar'}};
+  if(form)o.body=form;else{o.headers['Content-Type']='application/json';o.body=JSON.stringify(payload||{})}
+  const ctrl=new AbortController(),tm=setTimeout(()=>ctrl.abort(),12000);o.signal=ctrl.signal;
+  try{
+    const r=await fetch(ECON+'?action='+encodeURIComponent(action),o);
+    const d=await r.json().catch(()=>null);
+    if(!d||d.success===false)throw Error((d&&d.error)||('HTTP '+r.status));
+    return d;
+  }finally{clearTimeout(tm)}
+}
+const eco=()=>state.eco||{};
+const ecoP=()=>eco().player||null;
+function upLvl(id){const p=ecoP();return p&&p.upgrades?(+p.upgrades[id]||0):0}
+function evMult(type){let m=1;for(const e of eco().events||[])if(e.type===type)m*=Math.max(.1,+e.mult||1);return m}
+function speedMul(){return(1+.04*upLvl('speed'))*evMult('speed')}
+function durMul(){return 1+.12*upLvl('dur')}
+function startMass(){return 25+10*upLvl('start')}
+function foodTarget(){return Math.round(700*evMult('food'))}
+const SKINS={neon:['#7cffcb','#0aa2ff'],gold:['#fff3b0','#d4a017'],rainbow:['#ff3f58','#f2c94c','#7ed321','#20b7ee','#9b59ff'],lava:['#ffd166','#e63946'],ice:['#e0fbfc','#5fa8d3'],toxic:['#d9ed92','#2d6a4f'],sunset:['#ffd166','#ef476f','#7b2cbf'],galaxy:['#c77dff','#10002b']};
+async function loadEco(){
+  try{
+    state.eco=await econ('state');
+    const inbox=state.eco.inbox||[];if(inbox.length)toast(inbox.join(' · '));
+  }catch(e){state.eco=null;console.warn('[ZeroAgar] economia non disponibile',e.message)}
+  renderEcoUI();
+}
+function renderEcoUI(){
+  const e=state.eco,p=e&&e.player;
+  const ci=document.getElementById('coinInfo');
+  if(ci)ci.innerHTML=p?'🪙 <b>'+p.coins+'</b> Zero Coin · 🎟️ Pass '+p.pass.tier+'/30':'';
+  const am=document.getElementById('umAdmin');if(am)am.style.display=p&&p.is_mod?'block':'none';
+  const b=document.getElementById('ecoBanner'),h=[];
+  for(const ev of (e&&e.events)||[]){
+    const x=ev.type==='announce'?'':' · x'+ev.mult+' '+({xp:'XP',coins:'Zero Coin',pass:'punti Pass',food:'cibo',speed:'velocità'}[ev.type]||'');
+    h.push('🎉 '+esc(ev.title)+x+(ev.descr?' — '+esc(ev.descr):''));
+  }
+  if(p&&p.banned)h.push('⛔ Account sospeso'+(p.ban_reason?': '+esc(p.ban_reason):''));
+  else if(p&&p.muted_until>Date.now()/1000)h.push('🔇 Sei silenziato in chat');
+  if(b){b.style.display=h.length?'block':'none';b.innerHTML=h.join(' &nbsp;|&nbsp; ')}
+}
+/* ----- skin: gradienti esclusivi o immagini/GIF caricate ----- */
+const skinCache={};
+function skinImg(id){
+  if(!/^\d+$/.test(id))return null;
+  let i=skinCache[id];
+  if(!i){
+    i=new Image();i.decoding='async';i.src=ECON+'?action=skin_file&id='+id;
+    let st=document.getElementById('skinStore');
+    if(!st){st=document.createElement('div');st.id='skinStore';st.style.cssText='position:fixed;left:0;top:0;width:1px;height:1px;opacity:.01;overflow:hidden;pointer-events:none;z-index:-1';document.body.appendChild(st)}
+    st.appendChild(i);skinCache[id]=i;
+  }
+  return i.complete&&i.naturalWidth?i:null;
+}
+function drawSkinCell(p,r,color,sk){
+  ctx.beginPath();ctx.arc(p.x,p.y,r,0,Math.PI*2);
+  const st=sk&&SKINS[sk];
+  if(st){const g=ctx.createRadialGradient(p.x-r*.3,p.y-r*.3,r*.1,p.x,p.y,r);st.forEach((c,i)=>g.addColorStop(i/(st.length-1),c));ctx.fillStyle=g}
+  else ctx.fillStyle=color;
+  ctx.fill();
+  if(sk&&sk.indexOf('custom:')===0){
+    const im=skinImg(sk.slice(7));
+    if(im){ctx.save();ctx.beginPath();ctx.arc(p.x,p.y,r,0,Math.PI*2);ctx.clip();ctx.drawImage(im,p.x-r,p.y-r,r*2,r*2);ctx.restore()}
+  }
+  ctx.beginPath();ctx.arc(p.x,p.y,r,0,Math.PI*2);ctx.strokeStyle='#fff';ctx.lineWidth=S.borderWidth||3;ctx.stroke();
+}
+function mySkin(){const p=ecoP();return p?p.equipped:'default'}
+async function fetchRemoteSkins(){
+  if(!state.eco)return;
+  const names=[...new Set(Object.values(state.remotePlayers).map(p=>String(p.username||'')).filter(Boolean))].slice(0,40);
+  if(!names.length)return;
+  try{const r=await econ('equipped_bulk',{usernames:names});for(const k in r.skins)state.remoteSkins[k]=String(r.skins[k])}catch(_){}
+}
+function remoteSkin(p){return state.remoteSkins[String(p.username||'').toLowerCase()]||'default'}
+/* ----- bot alleati: Raccoglitore e Cacciatore (tutti quelli posseduti entrano in partita) ----- */
+function spawnAllies(){
+  state.allies=[];const p=ecoP(),c=state.cells[0];if(!p||!c)return;
+  const has=id=>(p.owned.bots||[]).includes(id);
+  if(has('collector'))state.allies.push({kind:'collector',x:c.x+rand(-80,80),y:c.y+rand(-80,80),r:15,sp:150,a:0,color:'#16b7ef'});
+  if(has('hunter'))state.allies.push({kind:'hunter',x:c.x+rand(-80,80),y:c.y+rand(-80,80),r:20,sp:140,a:3,m:60,color:'#ff7a18'});
+}
+function updateAllies(dt){
+  if(!state.allies.length||!state.cells.length)return;
+  const lead=state.cells.reduce((a,c)=>c.m>a.m?c:a,state.cells[0]);
+  const near=(x,y,R)=>(x-lead.x)**2+(y-lead.y)**2<R*R;
+  for(const a of state.allies){
+    let tx,ty,best=600*600;
+    if(a.kind==='hunter'){
+      for(const b of state.bots){if(b.m<a.m*.8&&near(b.x,b.y,1100)){const d=(b.x-a.x)**2+(b.y-a.y)**2;if(d<best){best=d;tx=b.x;ty=b.y}}}
+    }else{
+      for(const f of state.foods){if(near(f.x,f.y,900)){const d=(f.x-a.x)**2+(f.y-a.y)**2;if(d<best){best=d;tx=f.x;ty=f.y}}}
+    }
+    if(tx===undefined){a.a+=dt*1.2;tx=lead.x+Math.cos(a.a)*(lead.r+70);ty=lead.y+Math.sin(a.a)*(lead.r+70)}
+    const dx=tx-a.x,dy=ty-a.y,d=Math.hypot(dx,dy)||1,s=Math.min(a.sp*1.6,d*4+40);
+    a.x=clamp(a.x+dx/d*s*dt,0,state.world);a.y=clamp(a.y+dy/d*s*dt,0,state.world);
+    if(a.kind==='collector'){
+      for(let i=0;i<state.foods.length;i++){const f=state.foods[i];if(Math.hypot(f.x-a.x,f.y-a.y)<a.r+f.r){lead.m+=f.m*.6;lead.r=massToRadius(lead.m);burst(f.x,f.y,f.c,2,90);state.foods[i]=food()}}
+    }else{
+      for(const b of state.bots){if(b.m<a.m*.8&&Math.hypot(b.x-a.x,b.y-a.y)<a.r+b.r){
+        lead.m+=b.m*.5;lead.r=massToRadius(lead.m);burst(b.x,b.y,b.color,14,220);addFeed('🤖 Il tuo Cacciatore ha divorato '+b.name);
+        b.x=rand(400,5600);b.y=rand(400,5600);b.m=rand(25,150);b.r=massToRadius(b.m);}}
+    }
+  }
+}
+function drawAllies(){
+  const z=state.camera.zoom;
+  for(const a of state.allies){
+    const p=screenPoint(a.x,a.y);ctx.beginPath();ctx.arc(p.x,p.y,a.r*z,0,Math.PI*2);
+    ctx.fillStyle=a.color;ctx.fill();ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.stroke();
+    ctx.fillStyle='#fff';ctx.font=Math.max(9,a.r*z)+'px Arial';ctx.textAlign='center';ctx.fillText(a.kind==='hunter'?'🎯':'🤖',p.x,p.y+a.r*z*.35);
+  }
+}
+/* potenziamento "Magnete passivo": attira il cibo vicino anche senza il bonus */
+function passiveMagnet(dt){
+  const l=upLvl('magnet');if(!l||state.fx.magnet>0)return;
+  const R=60+45*l;
+  for(const f of state.foods)for(const c of state.cells){
+    const dx=c.x-f.x,dy=c.y-f.y,d=Math.hypot(dx,dy);
+    if(d<c.r+R&&d>1){const s=Math.min(d,140*dt);f.x+=dx/d*s;f.y+=dy/d*s;break}
+  }
+}
+/* ricompensa a fine partita (il server decide le quantità) */
+async function endGameReward(leaving){
+  if(state.rewarded||!state.eco||(ecoP()&&ecoP().banned))return;
+  state.rewarded=true;
+  const body={score:Math.floor(state.score),kills:state.kills,food:state.foodEaten,seconds:Math.floor(state.runTime)};
+  if(leaving){try{fetch(ECON+'?action=game_end',{method:'POST',keepalive:true,credentials:'same-origin',headers:{'X-Requested-With':'ZeroAgar','Content-Type':'application/json'},body:JSON.stringify(body)})}catch(_){}return}
+  try{
+    const r=await econ('game_end',body),w=r.reward||{};
+    state.eco.player=r.player;renderEcoUI();
+    const ds=document.getElementById('deathStats');
+    if(ds&&(w.coins||w.xp))ds.textContent+=' · 🪙 +'+w.coins+' Zero Coin · ⭐ +'+w.xp+' XP · 🎟️ +'+w.pass+' Pass'+(w.levelUp?' · 🆙 LIVELLO SU!':'');
+  }catch(e){console.warn('[ZeroAgar] ricompensa non assegnata',e.message)}
+}
+/* chat: controlli lato client (la moderazione vera va applicata anche dal server della chat) */
+function chatAllowed(text){
+  const p=ecoP(),cfg=eco().cfg||{};
+  if(cfg.chat_enabled==='0'){toast('La chat è stata disattivata dagli admin');return false}
+  if(p&&p.banned){toast('Account sospeso');return false}
+  if(p&&p.muted_until>Date.now()/1000){toast('Sei silenziato: non puoi scrivere in chat');return false}
+  const slow=(+cfg.chat_slowmode||0)*1000,t=Date.now();
+  if(slow&&t-(chatAllowed.last||0)<slow){toast('Slowmode: aspetta '+Math.ceil((slow-(t-chatAllowed.last))/1000)+'s');return false}
+  const bad=String(cfg.chat_blocked_words||'').split(',').map(s=>s.trim().toLowerCase()).filter(Boolean);
+  if(bad.some(w=>text.toLowerCase().includes(w))){toast('Messaggio bloccato dal filtro');return false}
+  chatAllowed.last=t;return true;
+}
+/* ----- finestre: shop, collezione, pass ----- */
+let shopTab=0;
+const refreshSheet=()=>loadEco().then(renderSheet);
+function footClose(){const f=el('div','sh-foot'),ok=el('button','green','Chiudi');ok.onclick=closeSheet;f.appendChild(ok);sheet.appendChild(f)}
+function needLogin(body){body.appendChild(el('div','help','Accedi dal portale per usare shop, skin e Zero Pass.'))}
+function skinDot(id){
+  const st=SKINS[id],s=el('span');
+  s.style.cssText='display:inline-block;width:20px;height:20px;border-radius:50%;margin-right:8px;vertical-align:middle;background:'+(st?'radial-gradient(circle at 30% 30%,'+st.join(',')+')':'#1db7ef');return s;
+}
+function buyRow(type,id,name,desc,price,done,doneLabel,extra){
+  const row=el('div','opt'),lab=el('div');
+  if(type==='skin')lab.appendChild(skinDot(id));
+  lab.appendChild(document.createTextNode(name+(extra||'')));if(desc)lab.appendChild(el('small','',desc));row.appendChild(lab);
+  const b=el('button',done?'gray':'blue',done?doneLabel:'🪙 '+price);b.disabled=done;
+  b.onclick=async()=>{b.disabled=true;try{const r=await econ('buy',{type,id});state.eco.player=r.player;state.eco.cat=r.cat;beep('pickup');toast('Acquisto riuscito');renderEcoUI();renderSheet()}catch(err){toast(err.message);b.disabled=false}};
+  row.appendChild(b);return row;
+}
+function buildPacks(body){
+  const e=eco(),mode=e.cfg&&e.cfg.payments_mode;
+  if(mode==='off')body.appendChild(el('div','help','Gli acquisti di Zero Coin non sono ancora attivi: intanto guadagnali giocando!'));
+  for(const id in (e.cat&&e.cat.packs)||{}){
+    const k=e.cat.packs[id],row=el('div','opt'),lab=el('div');
+    lab.appendChild(document.createTextNode('🪙 '+k.coins+' Zero Coin · '+k.label));lab.appendChild(el('small','','€ '+(k.cents/100).toFixed(2)+(mode==='demo'?' (modalità demo: gratis)':'')));row.appendChild(lab);
+    const b=el('button','green','Acquista');b.disabled=mode==='off';
+    b.onclick=async()=>{b.disabled=true;try{const r=await econ('buy_coins',{pack:id});
+      if(r.url){window.open(r.url,'_blank','noopener');toast('Completa il pagamento nella nuova scheda')}
+      else{state.eco.player=r.player;renderEcoUI();toast('Zero Coin aggiunti!');beep('pickup');renderSheet()}}catch(err){toast(err.message)}b.disabled=false};
+    row.appendChild(b);body.appendChild(row);
+  }
+  if(mode==='external')body.appendChild(el('div','help','Dopo il pagamento i coin arrivano in pochi secondi: usa "Aggiorna account" dal menu.'));
+}
+function renderShop(){
+  const e=eco(),p=ecoP();sheetHead('🛒 Shop · 🪙 '+(p?p.coins:0));
+  const tabs=el('div','sh-tabs');
+  ['Potenziamenti','Skin','Bot','Zero Coin'].forEach((n,i)=>{const b=el('button',i===shopTab?'on':'',n);b.onclick=()=>{shopTab=i;renderShop()};tabs.appendChild(b)});
+  sheet.appendChild(tabs);
+  const body=el('div','sh-body');
+  if(!p)needLogin(body);
+  else{
+    if(+((e.cfg||{}).shop_discount)>0)body.appendChild(el('div','help','🏷️ Sconto attivo: -'+e.cfg.shop_discount+'%'));
+    const c=e.cat||{};
+    if(shopTab===0)for(const id in c.upgrades){const u=c.upgrades[id];body.appendChild(buyRow('upgrade',id,u.name,u.desc,u.next,u.next===null,'MAX',' · Lv '+u.level+'/'+u.max))}
+    else if(shopTab===1)for(const id in c.skins){const s=c.skins[id],own=p.owned.skins.includes(id);
+      body.appendChild(s.pass&&!own?(()=>{const r=el('div','opt'),l=el('div');l.appendChild(skinDot(id));l.appendChild(document.createTextNode(s.name));l.appendChild(el('small','','Esclusiva Zero Pass (livello 30 Premium)'));r.appendChild(l);r.appendChild(el('span','badge','PASS'));return r})():buyRow('skin',id,s.name,'',s.price,own,'Posseduta'))}
+    else if(shopTab===2)for(const id in c.bots){const b=c.bots[id];body.appendChild(buyRow('bot',id,b.name,b.desc,b.price,p.owned.bots.includes(id),'Posseduto'))}
+    else buildPacks(body);
+  }
+  sheet.appendChild(body);footClose();
+}
+function renderCollection(){
+  const e=eco(),p=ecoP();sheetHead('🎨 Collezione');const body=el('div','sh-body');
+  if(!p){needLogin(body);sheet.appendChild(body);footClose();return}
+  const h=t=>{const d=el('div','',t);d.style.cssText='font-weight:800;font-size:12px;margin:14px 0 2px;text-transform:uppercase;color:#13b8ef';return d};
+  const equip=async(skin)=>{try{const r=await econ('equip',{skin});state.eco.player=r.player;renderEcoUI();renderSheet()}catch(err){toast(err.message)}};
+  const row=(label,id,dot)=>{
+    const r=el('div','opt'),l=el('div');if(dot)l.appendChild(dot);l.appendChild(document.createTextNode(label));r.appendChild(l);
+    const cur=p.equipped===id,b=el('button',cur?'gray':'blue',cur?'In uso':'Equipaggia');b.disabled=cur;b.onclick=()=>equip(id);r.appendChild(b);return r;
+  };
+  body.appendChild(h('Skin'));
+  body.appendChild(row('Predefinita (colore profilo)','default'));
+  for(const id of p.owned.skins)body.appendChild(row((e.cat.skins[id]||{}).name||id,id,skinDot(id)));
+  for(const s of e.custom||[]){
+    const r=el('div','opt'),l=el('div');
+    const img=document.createElement('img');img.src=ECON+'?action=skin_file&id='+s.id;img.style.cssText='width:34px;height:34px;border-radius:50%;object-fit:cover;vertical-align:middle;margin-right:8px;background:#ddd';l.appendChild(img);
+    l.appendChild(document.createTextNode(s.name));l.appendChild(el('small','',({approved:'Approvata',pending:'In attesa di approvazione (visibile solo a te)',rejected:'Rifiutata'}[s.status]||s.status)+' · '+s.w+'×'+s.h));r.appendChild(l);
+    const box=el('div');box.style.cssText='display:flex;gap:6px';
+    if(s.status!=='rejected'){const id='custom:'+s.id,cur=p.equipped===id,b=el('button',cur?'gray':'blue',cur?'In uso':'Usa');b.disabled=cur;b.onclick=()=>equip(id);box.appendChild(b)}
+    const d=el('button','gray','🗑');d.onclick=async()=>{if(!confirm('Eliminare questa skin?'))return;try{const x=await econ('delete_skin',{id:s.id});state.eco.player=x.player;state.eco.custom=x.custom;renderSheet()}catch(err){toast(err.message)}};
+    box.appendChild(d);r.appendChild(box);body.appendChild(r);
+  }
+  const cfg=e.cfg||{};
+  if(cfg.skin_upload_enabled==='1'){
+    const up=el('div','opt'),col=el('div');col.style.width='100%';
+    col.appendChild(el('div','','⬆️ Carica una skin personalizzata'));
+    col.appendChild(el('small','','PNG, JPG, GIF animata o WEBP · da 16 a 1024 px · max '+cfg.skin_max_kb+' KB · fino a '+cfg.skin_max_per_user+' skin'+(cfg.skin_auto_approve==='1'?'':' · approvata da un moderatore')));
+    const fi=document.createElement('input');fi.type='file';fi.accept='image/png,image/jpeg,image/gif,image/webp';fi.style.cssText='display:block;margin:8px 0;max-width:100%';
+    const nm=document.createElement('input');nm.maxLength=24;nm.placeholder='Nome skin';nm.style.cssText='width:100%;padding:8px;border:1px solid #bbb;border-radius:6px;margin-bottom:8px';
+    const go=el('button','green','Carica');go.style.width='100%';
+    go.onclick=async()=>{
+      if(!fi.files[0]){toast('Scegli un file');return}
+      const fd=new FormData();fd.append('file',fi.files[0]);fd.append('name',nm.value);go.disabled=true;
+      try{const r=await econ('upload_skin',undefined,fd);state.eco.custom=r.custom;toast(r.status==='approved'?'Skin caricata e approvata':'Skin caricata: in attesa di approvazione');renderSheet()}
+      catch(err){toast(err.message);go.disabled=false}
+    };
+    col.appendChild(fi);col.appendChild(nm);col.appendChild(go);up.appendChild(col);body.appendChild(up);
+  }else body.appendChild(el('div','help','Gli upload di skin sono momentaneamente disattivati.'));
+  body.appendChild(h('Bot alleati'));
+  const c=e.cat.bots;let any=false;
+  for(const id of p.owned.bots){any=true;body.appendChild(el('div','opt',(c[id]||{}).name+' — '+((c[id]||{}).desc||'')+' (entra in ogni partita)'))}
+  if(!any)body.appendChild(el('div','help','Compra un bot nello Shop: scenderà in campo con te a ogni partita.'));
+  body.appendChild(el('div','help','Le modifiche si vedono subito; i bot entrano dalla prossima partita.'));
+  sheet.appendChild(body);footClose();
+}
+function renderPass(){
+  const e=eco(),p=ecoP(),pc=e.cat&&e.cat.pass;sheetHead('🎟️ Zero Pass'+(pc?' · '+pc.season:''));const body=el('div','sh-body');
+  if(!p||!pc){needLogin(body);sheet.appendChild(body);footClose();return}
+  const inT=p.pass.tier>=30?100:Math.floor((p.pass.points%pc.step)/pc.step*100);
+  body.innerHTML='<div style="margin:8px 0;font-weight:800">Livello '+p.pass.tier+' / 30 · '+p.pass.points+' punti · 🪙 '+p.coins+'</div><div class="xp"><i style="width:'+inT+'%"></i></div><div class="help">Ogni partita (almeno 15 secondi) assegna punti Pass.'+(pc.ends?' Fine stagione: '+esc(pc.ends):'')+'</div>';
+  if(!p.pass.premium){
+    const b=el('button','green','👑 Sblocca Premium · 🪙 '+pc.premium_price);b.style.cssText='width:100%;margin:8px 0';
+    b.onclick=async()=>{try{const r=await econ('pass_buy',{});state.eco.player=r.player;renderEcoUI();toast('Zero Pass Premium sbloccato!');beep('pickup');renderSheet()}catch(err){toast(err.message)}};body.appendChild(b);
+  }else body.appendChild(el('div','help','👑 Zero Pass Premium attivo'));
+  for(const t in pc.tiers){
+    const T=+t,r=pc.tiers[t],open=p.pass.tier>=T,row=el('div','opt');row.appendChild(el('div','','Lv '+T));
+    const mk=(track,label)=>{
+      const got=(track==='prem'?p.pass.prem:p.pass.free).includes(T),ok=open&&(track==='free'||p.pass.premium)&&!got;
+      const b=el('button',got?'gray':ok?'blue':'gray',(got?'✔ ':track==='prem'?'👑 ':'')+label);b.disabled=!ok;b.style.fontSize='12px';
+      b.onclick=async()=>{try{const x=await econ('pass_claim',{tier:T,track});state.eco.player=x.player;state.eco.cat=x.cat;renderEcoUI();toast('Ricevuto: '+x.label);beep('pickup');renderSheet()}catch(err){toast(err.message)}};return b;
+    };
+    const box=el('div');box.style.cssText='display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end';box.appendChild(mk('free',r.free.label));box.appendChild(mk('prem',r.prem.label));
+    row.appendChild(box);body.appendChild(row);
+  }
+  sheet.appendChild(body);footClose();
+}
+document.getElementById('shopBtn').onclick=()=>openSheet('shop');
+document.getElementById('passBtn').onclick=()=>openSheet('pass');
+document.getElementById('skinsBtn').onclick=()=>openSheet('skins');
 
 applySettings();
 loadAccount();
