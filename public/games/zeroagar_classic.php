@@ -460,14 +460,10 @@ function draw(){
     const p=screenPoint(b.x,b.y);ctx.beginPath();ctx.arc(p.x,p.y,b.r*z,0,Math.PI*2);ctx.fillStyle=b.color;ctx.fill();ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.stroke();
     if(b.r*z>20){ctx.fillStyle='#fff';ctx.font='bold 12px Arial';ctx.textAlign='center';ctx.fillText(b.name,p.x,p.y+4)}
   }
-for(const c of state.cells){
-  for(let i=state.foods.length-1;i>=0;i--){
-    const f=state.foods[i];
-    if(d2(c,f)<c.r){c.m+=f.m;c.r=massToRadius(c.m);state.foods[i]=food();state.foodEaten++}
+  for(const c of state.cells){
+    const p=screenPoint(c.x,c.y);ctx.beginPath();ctx.arc(p.x,p.y,c.r*z,0,Math.PI*2);ctx.fillStyle=c.color;ctx.fill();ctx.strokeStyle='#fff';ctx.lineWidth=3;ctx.stroke();
+    if(c.r*z>22){ctx.fillStyle='#fff';ctx.font='bold 13px Arial';ctx.textAlign='center';ctx.fillText(state.nick,p.x,p.y+4)}
   }
-}
-  c.pulse=Math.max(0,(c.pulse||0)-0.05);
-}
   if(state.minimap){
     mini.style.display='block';mctx.clearRect(0,0,150,150);
     mctx.fillStyle='#f2f2f2';mctx.fillRect(0,0,150,150);mctx.strokeStyle='#aaa';mctx.strokeRect(.5,.5,149,149);
