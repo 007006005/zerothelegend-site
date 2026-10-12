@@ -121,7 +121,7 @@ function setting_defaults(): array
     return [
         'skin_upload_enabled' => '1',
         'skin_auto_approve' => '0',
-        'skin_max_kb' => '1024',
+        'skin_max_kb' => '10240',
         'skin_max_per_user' => '5',
         'payments_mode' => 'off',      // off | demo | external
         'payment_url' => '',
@@ -145,6 +145,10 @@ function settings_all(bool $reset = false): array
         $cache = setting_defaults();
         foreach (db()->query('SELECT k,v FROM settings') as $r) {
             $cache[$r['k']] = (string)$r['v'];
+        }
+        /* il vecchio limite predefinito (1 MB) passa automaticamente a 10 MB */
+        if (($cache['skin_max_kb'] ?? '') === '1024') {
+            $cache['skin_max_kb'] = '10240';
         }
     }
     return $cache;
@@ -805,7 +809,7 @@ function main(): void
             if (!$f || (int)$f['error'] !== UPLOAD_ERR_OK || !is_uploaded_file((string)$f['tmp_name'])) {
                 fail('Upload non riuscito');
             }
-            $maxKb = max(32, (int)setting('skin_max_kb'));
+            $maxKb = min(10240, max(32, (int)setting('skin_max_kb')));   // tetto: 10 MB
             if ((int)$f['size'] > $maxKb * 1024) {
                 fail("File troppo pesante (massimo $maxKb KB)");
             }
@@ -820,8 +824,8 @@ function main(): void
             }
             $w = (int)$info[0];
             $h = (int)$info[1];
-            if ($w < 16 || $h < 16 || $w > 1024 || $h > 1024) {
-                fail('Dimensioni consentite: da 16x16 a 1024x1024 pixel');
+            if ($w < 16 || $h < 16) {
+                fail('Immagine troppo piccola (minimo 16x16 pixel)');
             }
             $ext = ['image/png' => 'png', 'image/jpeg' => 'jpg', 'image/gif' => 'gif', 'image/webp' => 'webp'][$info['mime']] ?? null;
             if (!$ext) {

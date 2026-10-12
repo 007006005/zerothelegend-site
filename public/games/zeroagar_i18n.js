@@ -153,6 +153,7 @@ d('Muovi a sinistra','Move left','Mover a la izquierda','Aller à gauche','Nach 
 d('Muovi a destra','Move right','Mover a la derecha','Aller à droite','Nach rechts','Mover para a direita','Вправо','向右移动','右へ移動','تحرك لليمين');
 d('Ferma le cellule (tieni premuto)','Stop cells (hold)','Detener células (mantener)','Arrêter les cellules (maintenir)','Zellen stoppen (halten)','Parar células (segurar)','Остановить клетки (удерживать)','停止细胞（按住）','セルを止める（長押し）','إيقاف الخلايا (اضغط مطولاً)');
 d('Espelli massa continuo (tieni premuto)','Continuous eject (hold)','Expulsión continua (mantener)','Éjection continue (maintenir)','Dauerauswurf (halten)','Ejeção contínua (segurar)','Непрерывный выброс (удерживать)','连续喷射（按住）','連続放出（長押し）','قذف مستمر (اضغط مطولاً)');
+d('Dash velocità (7s, ricarica 30s)','Speed dash (7s, 30s recharge)','Dash de velocidad (7 s, recarga 30 s)','Dash de vitesse (7 s, recharge 30 s)','Speed-Dash (7 s, 30 s Aufladung)','Dash de velocidade (7 s, recarga 30 s)','Рывок (7 с, перезарядка 30 с)','加速冲刺（7秒，冷却30秒）','スピードダッシュ（7秒、リチャージ30秒）','اندفاع سريع (7 ثوانٍ، إعادة شحن 30 ثانية)');
 d('Pausa','Pause','Pausa','Pause','Pause','Pausa','Пауза','暂停','ポーズ','إيقاف مؤقت');
 d('Rigioca dopo la morte','Play again after death','Jugar de nuevo tras morir','Rejouer après la mort','Nach dem Tod neu starten','Jogar de novo após morrer','Играть снова после смерти','死亡后重新开始','死亡後に再プレイ','العب مجدداً بعد الموت');
 d('Menu di gioco','Game menu','Menú del juego','Menu du jeu','Spielmenü','Menu do jogo','Меню игры','游戏菜单','ゲームメニュー','قائمة اللعبة');
