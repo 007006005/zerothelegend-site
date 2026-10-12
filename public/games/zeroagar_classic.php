@@ -1619,13 +1619,51 @@ function renderEcoUI(){
 }
 /* ----- skin: gradienti esclusivi o immagini/GIF caricate ----- */
 const skinCache={};
+/* Skin animate (GIF/WEBP): i frame vengono decodificati una volta e disegnati in base al tempo,
+   così l'animazione gira nel canvas in qualsiasi browser che supporti ImageDecoder. */
+const animSkins={};
+function loadAnimSkin(id){
+  const a=animSkins[id]={frames:null,total:0,t0:performance.now(),failed:false};
+  (async()=>{
+    try{
+      if(!('ImageDecoder' in window)||Object.keys(animSkins).length>8)throw 0;
+      const r=await fetch(ECON+'?action=skin_file&id='+id,{credentials:'same-origin'});
+      const type=(r.headers.get('content-type')||'').split(';')[0].trim();
+      if(!r.ok||!/^image\/(gif|webp|png)$/.test(type))throw 0;
+      const dec=new ImageDecoder({data:await r.arrayBuffer(),type});
+      await dec.tracks.ready;
+      const tr=dec.tracks.selectedTrack;
+      if(!tr||!tr.animated||tr.frameCount<2)throw 0;
+      const n=tr.frameCount,step=Math.max(1,Math.ceil(n/100)),frames=[];
+      for(let i=0;i<n;i+=step){
+        const {image}=await dec.decode({frameIndex:i});
+        const sc=Math.min(1,192/Math.max(image.displayWidth,image.displayHeight));
+        const cv=document.createElement('canvas');
+        cv.width=Math.max(1,Math.round(image.displayWidth*sc));cv.height=Math.max(1,Math.round(image.displayHeight*sc));
+        cv.getContext('2d').drawImage(image,0,0,cv.width,cv.height);
+        frames.push({cv,dur:Math.max(20,(image.duration||100000)/1000*step)});
+        image.close();
+      }
+      a.frames=frames;a.total=frames.reduce((x,f)=>x+f.dur,0);a.t0=performance.now();
+    }catch(_){a.failed=true}
+  })();
+  return a;
+}
+function skinFrame(id){
+  if(!/^\d+$/.test(id))return null;
+  const a=animSkins[id]||loadAnimSkin(id);
+  if(!a.frames)return null;
+  const t=(performance.now()-a.t0)%a.total;let acc=0;
+  for(const f of a.frames){acc+=f.dur;if(t<acc)return f.cv}
+  return a.frames[a.frames.length-1].cv;
+}
 function skinImg(id){
   if(!/^\d+$/.test(id))return null;
   let i=skinCache[id];
   if(!i){
-    i=new Image();i.decoding='async';i.src=ECON+'?action=skin_file&id='+id;
+    i=new Image();i.style.cssText='width:96px;height:96px';i.src=ECON+'?action=skin_file&id='+id;
     let st=document.getElementById('skinStore');
-    if(!st){st=document.createElement('div');st.id='skinStore';st.style.cssText='position:fixed;left:0;top:0;width:1px;height:1px;opacity:.01;overflow:hidden;pointer-events:none;z-index:-1';document.body.appendChild(st)}
+    if(!st){st=document.createElement('div');st.id='skinStore';st.style.cssText='position:fixed;left:0;top:0;width:96px;height:96px;opacity:.02;overflow:hidden;pointer-events:none;z-index:-1';document.body.appendChild(st)}
     st.appendChild(i);skinCache[id]=i;
   }
   return i.complete&&i.naturalWidth?i:null;
@@ -1637,7 +1675,7 @@ function drawSkinCell(p,r,color,sk){
   else ctx.fillStyle=color;
   ctx.fill();
   if(sk&&sk.indexOf('custom:')===0){
-    const im=skinImg(sk.slice(7));
+    const im=skinFrame(sk.slice(7))||skinImg(sk.slice(7));
     if(im){ctx.save();ctx.beginPath();ctx.arc(p.x,p.y,r,0,Math.PI*2);ctx.clip();ctx.drawImage(im,p.x-r,p.y-r,r*2,r*2);ctx.restore()}
   }
   ctx.beginPath();ctx.arc(p.x,p.y,r,0,Math.PI*2);ctx.strokeStyle='#fff';ctx.lineWidth=S.borderWidth||3;ctx.stroke();
