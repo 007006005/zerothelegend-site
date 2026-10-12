@@ -67,6 +67,8 @@ body.dark .pu{background:rgba(28,33,41,.95);color:#e8ecf1}
 body.dark .sh-head,body.dark .sh-tabs,body.dark .opt,body.dark .sh-foot{border-color:rgba(255,255,255,.1)}
 body.dark .sw{background:#4a5361}body.dark .sw.on{background:#58d100}
 #ecoBanner{position:absolute;left:50%;top:160px;transform:translateX(-50%);padding:6px 14px;font-size:12px;font-weight:700;max-width:90vw;text-align:center;pointer-events:none;z-index:9;zoom:var(--ui,1)}
+.role-tag{display:inline-block;font-size:9px;font-weight:800;color:#fff;border-radius:4px;padding:1px 5px;margin-right:3px;text-transform:uppercase;vertical-align:1px}
+.chat-gif{display:block;max-width:150px;max-height:110px;border-radius:8px;margin:4px 0}
 @media(pointer:coarse){#touch{display:block}}
 </style>
 </head>
@@ -147,7 +149,7 @@ body.dark .sw{background:#4a5361}body.dark .sw.on{background:#58d100}
     <div class="chat-head"><span>💬 CHAT ARENA</span><span class="chat-count" id="arenaOnline">0 online</span></div>
     <div class="chat-body" id="arenaChatBody"></div>
     <form class="chat-form" id="arenaChatForm"><input id="arenaChatInput" maxlength="200" autocomplete="off" placeholder="Scrivi nella chat globale…"><button type="submit">INVIA</button></form>
-    <div class="chat-emotes" aria-label="Emoticon chat"><button type="button" data-emote="😀">😀</button><button type="button" data-emote="😂">😂</button><button type="button" data-emote="😎">😎</button><button type="button" data-emote="😮">😮</button><button type="button" data-emote="❤️">❤️</button><button type="button" data-emote="👋">👋</button></div>
+    <div class="chat-emotes" aria-label="Emoticon chat"><button type="button" data-emote="😀">😀</button><button type="button" data-emote="😂">😂</button><button type="button" data-emote="😎">😎</button><button type="button" data-emote="😮">😮</button><button type="button" data-emote="❤️">❤️</button><button type="button" data-emote="👋">👋</button><button type="button" data-emote="🔥">🔥</button><button type="button" data-gif="1" title="Inserisci GIF da URL">GIF</button></div>
   </div>
   <div id="death" class="panel">
     <h2>SEI STATO DIVORATO</h2><div class="deathScore" id="deathScore">0</div><div id="deathStats" class="help"></div>
@@ -324,6 +326,11 @@ function drawPickups(){
     ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.stroke();
     ctx.font=Math.max(10,18*z)+'px Arial';ctx.textAlign='center';ctx.fillText(def.icon,p.x,p.y+6*z);
   }
+}
+function drawVirusShape(x,y,r){
+  ctx.save();ctx.translate(x,y);ctx.beginPath();
+  for(let i=0;i<24;i++){const a=i*Math.PI*2/24,rr=(i%2?r*.7:r);ctx.lineTo(Math.cos(a)*rr,Math.sin(a)*rr)}
+  ctx.closePath();ctx.fillStyle='#54b948';ctx.fill();ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.stroke();ctx.restore();
 }
 function drawParticles(){
   const z=state.camera.zoom;
@@ -1106,12 +1113,14 @@ async function refreshLeaderboard(){
 
 /* Salvataggio: un solo invio alla volta, massimo ogni 15 secondi, errori visibili */
 async function saveProgress(force=false){
-  if(!state.online||!state.loggedIn||state.saving)return;
+  if(!state.online||!state.loggedIn){if(force)toast('Non collegato: accedi dal portale per salvare i progressi');return}
+  if(state.saving)return;
   if(!force&&Date.now()-state.lastSave<15000)return;
   state.saving=true;
   state.lastSave=Date.now();
   try{
     await api('game_save',{game:'zeroagar_classic',score:Math.floor(state.score),data:{best:Math.floor(state.best),plays:state.plays,total:Math.floor(state.time),kills:state.kills,particles:state.foodEaten,mode:state.mode}});
+    if(force)toast('Progressi salvati ✔');
   }catch(e){
     console.warn('[ZeroAgar] salvataggio fallito',e);
     toast('Salvataggio non riuscito: '+e.message);
@@ -1180,12 +1189,20 @@ function updateRemotePlayers(players){
   state.remotePlayers=map;
   const e=document.getElementById('arenaOnline');if(e)e.textContent=((players||[]).length||0)+' online';
 }
+const CHAT_EMOJI={':fire:':'🔥',':heart:':'❤️',':lol:':'😂',':cool:':'😎',':wow:':'😮',':gg:':'🏆',':ok:':'👌',':skull:':'💀',':gg2:':'🎉'};
+function chatBody(text){
+  let out=esc(text);
+  for(const k in CHAT_EMOJI)out=out.split(k).join(CHAT_EMOJI[k]);
+  return out.replace(/https:\/\/[^\s<>]+?\.(gif|png|jpe?g|webp)(\?[^\s<>]*)?/gi,u=>'<img class="chat-gif" src="'+u+'" alt="gif" loading="lazy" referrerpolicy="no-referrer">');
+}
 function renderArenaChat(messages){
   const box=document.getElementById('arenaChatBody');if(!box||!Array.isArray(messages))return;
   for(const m of messages){
     const id='am-'+m.id;if(document.getElementById(id))continue;
     const row=document.createElement('div');row.className='chat-msg';row.id=id;
-    row.innerHTML='<b>'+esc(m.username)+'</b>: '+esc(m.text);
+    const tag=m.role_label?'<span class="role-tag" style="background:'+esc(m.role_color)+'">'+esc(m.role_label)+'</span> ':'';
+    const nameStyle=m.role_color?' style="color:'+esc(m.role_color)+'"':'';
+    row.innerHTML=tag+'<b'+nameStyle+'>'+esc(m.username)+'</b>: '+chatBody(m.text);
     box.appendChild(row);
   }
   while(box.children.length>100)box.removeChild(box.firstChild);
@@ -1199,6 +1216,14 @@ async function arenaJoin(){
     if(r?.success){state.arenaJoined=true;updateRemotePlayers(r.players||[]);showArenaChat(true);await arenaSync(true)}
   }catch(e){console.warn('[ZeroAgar] arena join fallito',e)}
 }
+function applyLost(list){
+  for(const L of list){
+    let best=-1,bd=1e9;
+    state.cells.forEach((c,i)=>{const d=Math.abs(c.m-L.m)+Math.hypot(c.x-L.x,c.y-L.y)*.2;if(d<bd){bd=d;best=i}});
+    if(best>=0)state.cells.splice(best,1);
+  }
+  if(!state.cells.length&&state.playing){state.arenaJoined=false;die('Un giocatore online ti ha divorato')}
+}
 async function arenaUpdate(){
   if(!state.arenaJoined||!state.playing||state.arenaUpdateBusy)return;
   state.arenaUpdateBusy=true;
@@ -1206,6 +1231,9 @@ async function arenaUpdate(){
     const r=await arenaCall('update',{color:playerSkinColor(),team:state.cells[0]?.team??null,score:Math.floor(state.score),cells:arenaCellsPayload()});
     if(r?.dead){state.arenaJoined=false;die('Sei stato divorato da un giocatore online');return}
     if(Number.isFinite(Number(r?.server_score)))state.score=Math.max(state.score,Number(r.server_score));
+    if(Array.isArray(r?.lost)&&r.lost.length)applyLost(r.lost);
+    if(Number(r?.gained)>0&&state.cells.length){const lead=state.cells.reduce((a,c)=>c.m>a.m?c:a,state.cells[0]);lead.m+=Number(r.gained);lead.r=massToRadius(lead.m)}
+    if(!state.playing)return;
     updateRemotePlayers(r.players||[]);
     state.lastUpd=now();
   }catch(e){
@@ -1340,7 +1368,7 @@ function die(reason='Divorato',final=false,won=false){
 function canEat(a,b){return a.m>b.m*1.10&&a.r>b.r*1.08}
 
 /* ----- Split in stile agar.io ----- */
-const MAX_CELLS=16,MIN_SPLIT_MASS=36,SPLIT_SPEED=1050,SPLIT_DECAY=3;
+const MAX_CELLS=16,MIN_SPLIT_MASS=36,SPLIT_SPEED=460,SPLIT_DECAY=4.5;
 /* Timer di riunione: 30s base + 2,33% della massa della cellula (ridotto dal potenziamento "Fusione rapida") */
 function mergeTime(m){return(30+m*0.0233)*(1-.04*upLvl('merge'))}
 function worldMouse(){const z=state.camera.zoom;return{x:state.camera.x+(state.mouse.x-W/2)/z,y:state.camera.y+(state.mouse.y-H/2)/z}}
@@ -1387,7 +1415,7 @@ function eject(){
   for(const c of state.cells){
     if(c.m<36)continue;
     c.m-=12;c.r=massToRadius(c.m);
-    state.ejected.push({x:c.x+Math.cos(ang)*(c.r+9),y:c.y+Math.sin(ang)*(c.r+9),vx:Math.cos(ang)*700+c.vx,vy:Math.sin(ang)*700+c.vy,m:12,r:massToRadius(12),life:8,color:c.color});
+    state.ejected.push({x:c.x+Math.cos(ang)*(c.r+9),y:c.y+Math.sin(ang)*(c.r+9),vx:Math.cos(ang)*700+c.vx,vy:Math.sin(ang)*700+c.vy,m:12,r:14,life:6,color:'#54b948',virus:true});
   }
 }
 function handleVirusHit(c,v){
@@ -1480,7 +1508,23 @@ function update(dt){
       }
     }
   }
-  for(const e of state.ejected){for(const c of state.cells){if(d2(e,c)<c.r){c.m+=e.m;c.r=massToRadius(c.m);e.life=0}}}
+  for(const e of state.ejected){if(e.virus)continue;for(const c of state.cells){if(d2(e,c)<c.r){c.m+=e.m;c.r=massToRadius(c.m);e.life=0}}}
+  for(const e of state.ejected){
+    if(!e.virus||e.life<=0)continue;
+    for(const b of state.bots){
+      if(b.dead)continue;
+      if(Math.hypot(b.x-e.x,b.y-e.y)<b.r+e.r*.6){
+        if(b.m>=60){
+          /* come un virus di agar.io: il bersaglio si spacca in due */
+          const half=b.m/2,a=Math.atan2(b.y-e.y,b.x-e.x);
+          b.m=half;b.r=massToRadius(half);
+          state.bots.push(Object.assign({},b,{m:half,r:massToRadius(half),x:clamp(b.x+Math.cos(a)*b.r*1.5,b.r,state.world-b.r),y:clamp(b.y+Math.sin(a)*b.r*1.5,b.r,state.world-b.r),vx:Math.cos(a)*180,vy:Math.sin(a)*180,think:0}));
+          burst(b.x,b.y,'#54b948',22,300);addFeed('🦠 Virus su '+b.name+': si è spaccato!');
+        }else continue;
+        e.life=0;break;
+      }
+    }
+  }
   state.ejected=state.ejected.filter(e=>e.life>0);
   for(const b of state.bots){
     if(b.dead)continue;
@@ -1555,7 +1599,7 @@ function draw(){
   drawPickups();
   for(const f of state.foods){const p=screenPoint(f.x,f.y);ctx.beginPath();ctx.arc(p.x,p.y,f.r*z*(FOOD_SCALE[S.foodSize]||1),0,Math.PI*2);ctx.fillStyle=f.c;ctx.fill()}
   drawParticles();
-  for(const e of state.ejected){const p=screenPoint(e.x,e.y);ctx.beginPath();ctx.arc(p.x,p.y,e.r*z,0,Math.PI*2);ctx.fillStyle=e.color;ctx.fill()}
+  for(const e of state.ejected){const p=screenPoint(e.x,e.y);if(e.virus){drawVirusShape(p.x,p.y,e.r*z);continue}ctx.beginPath();ctx.arc(p.x,p.y,e.r*z,0,Math.PI*2);ctx.fillStyle=e.color;ctx.fill()}
   for(const v of state.viruses){
     const p=screenPoint(v.x,v.y);ctx.save();ctx.translate(p.x,p.y);ctx.rotate(v.spin);ctx.beginPath();
     for(let i=0;i<40;i++){const a=i*Math.PI*2/40,r=(i%2?v.r*.84:v.r)*z;ctx.lineTo(Math.cos(a)*r,Math.sin(a)*r)}
@@ -1665,6 +1709,12 @@ document.querySelectorAll('.chat-emotes [data-emote]').forEach(b=>b.addEventList
   const inp=document.getElementById('arenaChatInput');
   const start=inp.selectionStart??inp.value.length,end=inp.selectionEnd??start;
   inp.setRangeText(b.dataset.emote||'',start,end,'end');inp.focus();
+}));
+document.querySelectorAll('.chat-emotes [data-gif]').forEach(b=>b.addEventListener('click',()=>{
+  const inp=document.getElementById('arenaChatInput');
+  const u=(prompt('Incolla l\'URL https di una GIF o immagine:')||'').trim();
+  if(!/^https:\/\/\S+\.(gif|png|jpe?g|webp)(\?\S*)?$/i.test(u)){toast('URL non valido: serve un link https a una GIF o immagine');return}
+  inp.value=(inp.value?inp.value+' ':'')+u;inp.focus();
 }));
 addEventListener('pagehide',()=>{
   try{navigator.sendBeacon(ARENA_API,new Blob([JSON.stringify({action:'leave'})],{type:'application/json'}))}catch(e){}
@@ -1950,7 +2000,7 @@ function renderCollection(){
     go.onclick=async()=>{
       if(!fi.files[0]){toast('Scegli un file');return}
       const fd=new FormData();fd.append('file',fi.files[0]);fd.append('name',nm.value);go.disabled=true;
-      try{const r=await econ('upload_skin',undefined,fd);state.eco.custom=r.custom;toast(r.status==='approved'?'Skin caricata e approvata':'Skin caricata: in attesa di approvazione');renderSheet()}
+      try{const r=await econ('upload_skin',undefined,fd);state.eco.custom=r.custom;await loadEco();const want=(r.custom||[]).length,have=(state.eco.custom||[]).length;if(have<want)toast('⚠️ La skin non risulta salvata sul server: serve controllare economia');else toast(r.status==='approved'?'Skin caricata e approvata':'Skin caricata: in attesa di approvazione');renderSheet()}
       catch(err){toast(err.message);go.disabled=false}
     };
     col.appendChild(fi);col.appendChild(nm);col.appendChild(go);up.appendChild(col);body.appendChild(up);
