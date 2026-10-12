@@ -138,7 +138,7 @@ body.dark .sw{background:#4a5361}body.dark .sw.on{background:#58d100}
     <button class="bottom-btn" id="miniBtn">MAPPA [M]</button>
     <button class="bottom-btn" id="pauseBtn">PAUSA [P]</button>
   </div>
-  <div id="touch"><button class="touchbtn" id="tsplit">SPLIT</button><button class="touchbtn" id="teject">MASSA</button></div>
+  <div id="touch"><button class="touchbtn" id="tsplit">SPLIT</button><button class="touchbtn" id="teject">MASSA</button><button class="touchbtn" id="tdash">DASH</button></div>
   <div id="toast" class="toast"></div>
   <div id="fps" style="display:none">0 FPS</div>
   <div id="quick"><button id="gearBtn" title="Menu e impostazioni">⚙️</button><button id="fsBtn" title="Schermo intero">⛶</button></div>
@@ -165,7 +165,7 @@ const mini=document.getElementById('mini'),mctx=mini.getContext('2d');
 /* Impostazioni salvate nel browser */
 const SKEY='zeroagar_settings_v1';
 const DEFAULTS={names:true,mass:false,autoZoom:true,botCount:'normal',botSkill:'normal',chat:true,theme:'light',quality:'high',grid:true,particles:true,minimap:true,fps:false,sound:true,volume:60,uiScale:100,touch:'auto',keepAwake:false,feedRate:'normal',deadZone:'normal',autoRespawn:false,vibration:false,minimapSize:'medium',minimapPos:'right',borderWidth:3,mergeTimer:false,worldBorder:true,cursorLine:false,foodSize:'normal',bgColor:'default',showScore:true,showLeaderboard:true,showFeed:true,mouseLeft:'none',mouseRight:'none'};
-const DEFAULT_KEYS={moveUp:'ArrowUp',moveDown:'ArrowDown',moveLeft:'ArrowLeft',moveRight:'ArrowRight',stop:'KeyS',split:'Space',doubleSplit:'KeyQ',tripleSplit:'KeyT',maxSplit:'KeyX',eject:'KeyW',holdFeed:'KeyF',pause:'KeyP',respawn:'KeyR',menu:'Escape',screenshot:'F9',focusChat:'Enter',minimap:'KeyM',zoomIn:'Equal',zoomOut:'Minus',zoomReset:'Digit0',toggleNames:'KeyN',toggleMass:'KeyK',toggleGrid:'KeyH',toggleTheme:'KeyJ'};
+const DEFAULT_KEYS={moveUp:'ArrowUp',moveDown:'ArrowDown',moveLeft:'ArrowLeft',moveRight:'ArrowRight',stop:'KeyS',split:'Space',doubleSplit:'KeyQ',tripleSplit:'KeyT',maxSplit:'KeyX',eject:'KeyW',holdFeed:'KeyF',dash:'ShiftLeft',pause:'KeyP',respawn:'KeyR',menu:'Escape',screenshot:'F9',focusChat:'Enter',minimap:'KeyM',zoomIn:'Equal',zoomOut:'Minus',zoomReset:'Digit0',toggleNames:'KeyN',toggleMass:'KeyK',toggleGrid:'KeyH',toggleTheme:'KeyJ'};
 const S=Object.assign({},DEFAULTS);
 try{Object.assign(S,JSON.parse(localStorage.getItem(SKEY)||'{}'))}catch(_){}
 S.keys=Object.assign({},DEFAULT_KEYS,(S.keys&&typeof S.keys==='object')?S.keys:{});
@@ -186,7 +186,7 @@ const state={
   serverLeaders:[],saving:false,rafId:0,
   pickups:[],fx:{speed:0,shield:0,magnet:0,double:0},combo:0,comboT:0,bestCombo:0,particles:[],feed:[],runTime:0
 };
-state.zoomMul=1;state.feedAcc=0;
+state.zoomMul=1;state.feedAcc=0;state.dash={t:0,cd:0};state.dashAcc=0;state.flash=0;
 state.eco=null;state.allies=[];state.remoteSkins={};state.rewarded=false;state.skinTimer=null;
 function esc(s){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
 function rand(a,b){return a+Math.random()*(b-a)}
@@ -232,6 +232,10 @@ function renderPowerups(){
     const t=state.fx[k];
     if(t>0)h+='<div class="pu" style="border-color:'+PICKUPS[k].color+'">'+PICKUPS[k].icon+' '+PICKUPS[k].name+' '+t.toFixed(1)+'s</div>';
   }
+  const dsh=state.dash;
+  if(dsh.t>0)h+='<div class="pu" style="border-color:#7cffcb">⚡ Dash '+dsh.t.toFixed(1)+'s</div>';
+  else if(dsh.cd>0)h+='<div class="pu">⚡ Dash '+Math.ceil(dsh.cd)+'s</div>';
+  else if(state.playing)h+='<div class="pu" style="border-color:#7cffcb">⚡ Dash pronto · '+keyLabel(S.keys.dash)+'</div>';
   if(state.combo>=3)h+='<div class="pu">🔥 Combo x'+state.combo+'</div>';
   box.innerHTML=h;
 }
@@ -247,6 +251,19 @@ function registerCombo(c){
   }
 }
 function updateExtras(dt){
+  const dsh=state.dash,prevCd=dsh.cd;
+  dsh.t=Math.max(0,dsh.t-dt);dsh.cd=Math.max(0,dsh.cd-dt);state.flash=Math.max(0,state.flash-dt);
+  if(prevCd>0&&dsh.cd===0&&state.playing){toast('⚡ Dash pronto!');beep('pickup')}
+  if(dsh.t>0&&S.particles){
+    state.dashAcc+=dt;
+    if(state.dashAcc>=.03){
+      state.dashAcc=0;
+      for(const c of state.cells.slice(0,4)){
+        if(state.particles.length>=(S.quality==='low'?80:300))break;
+        state.particles.push({x:c.x,y:c.y,vx:-c.vx*.15,vy:-c.vy*.15,life:.45,color:Math.random()<.5?'#7cffcb':'#0aa2ff',r:Math.max(3,c.r*.28)});
+      }
+    }
+  }
   for(const k of PICKUP_KEYS)state.fx[k]=Math.max(0,state.fx[k]-dt);
   if(state.fx.magnet>0){
     for(const f of state.foods){
@@ -304,7 +321,36 @@ function drawParticles(){
   }
   ctx.globalAlpha=1;
 }
+function startDash(){
+  if(!state.playing||state.paused||state.gameOver||!state.cells.length)return;
+  const d=state.dash;
+  if(d.t>0)return;
+  if(d.cd>0){toast('⚡ Dash in ricarica: '+Math.ceil(d.cd)+'s');return}
+  d.t=7;d.cd=30;state.flash=.3;
+  for(const c of state.cells.slice(0,4))burst(c.x,c.y,'#7cffcb',24,420);
+  addFeed('⚡ Dash attivo (7s)');toast('⚡ DASH!');beep('dash');renderPowerups();
+}
+function drawDashFx(){
+  if(state.flash>0){ctx.fillStyle='rgba(255,255,255,'+Math.min(.35,state.flash)+')';ctx.fillRect(0,0,W,H)}
+  if(state.dash.t<=0||!S.particles)return;
+  const g=ctx.createRadialGradient(W/2,H/2,Math.min(W,H)*.35,W/2,H/2,Math.max(W,H)*.75);
+  g.addColorStop(0,'rgba(124,255,203,0)');g.addColorStop(1,'rgba(10,162,255,'+(.22+.08*Math.sin(state.time*10))+')');
+  ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
+  if(S.quality==='low')return;
+  ctx.save();ctx.strokeStyle='rgba(255,255,255,.28)';ctx.lineWidth=2;
+  for(let i=0;i<16;i++){
+    const a=i/16*Math.PI*2,r0=Math.min(W,H)*(.3+.5*((i*.37+state.time*2.2)%1)),len=40+(i%4)*14;
+    ctx.beginPath();ctx.moveTo(W/2+Math.cos(a)*r0,H/2+Math.sin(a)*r0);ctx.lineTo(W/2+Math.cos(a)*(r0+len),H/2+Math.sin(a)*(r0+len));ctx.stroke();
+  }
+  ctx.restore();
+}
 function drawCellFx(c,p,z){
+  if(state.dash.t>0){
+    const pulse=.6+.4*Math.sin(state.time*18);
+    ctx.save();ctx.shadowColor='#7cffcb';ctx.shadowBlur=S.quality==='low'?0:24;
+    ctx.beginPath();ctx.arc(p.x,p.y,c.r*z+9,0,Math.PI*2);
+    ctx.strokeStyle='rgba(124,255,203,'+(.55+.35*pulse)+')';ctx.lineWidth=5;ctx.stroke();ctx.restore();
+  }
   if(state.fx.shield>0){
     const blink=state.fx.shield<2&&Math.floor(state.time*8)%2;
     ctx.beginPath();ctx.arc(p.x,p.y,c.r*z+7,0,Math.PI*2);
@@ -338,7 +384,7 @@ function beep(kind){
   try{
     actx=actx||new (window.AudioContext||window.webkitAudioContext)();
     if(actx.state==='suspended')actx.resume();
-    const presets={eat:[520,620,.05],combo:[700,1000,.18],pickup:[600,950,.2],kill:[240,480,.16],death:[260,70,.5]};
+    const presets={eat:[520,620,.05],combo:[700,1000,.18],pickup:[600,950,.2],dash:[300,1100,.3],kill:[240,480,.16],death:[260,70,.5]};
     const p=presets[kind];if(!p)return;
     const o=actx.createOscillator(),g=actx.createGain(),n=actx.currentTime,vol=S.volume/100*.12;
     o.type=kind==='death'?'sawtooth':'sine';
@@ -403,6 +449,7 @@ const ACTIONS=[
   {id:'maxSplit',l:'Split massimo (fino a 16)',g:'Azioni'},
   {id:'eject',l:'Espelli massa',g:'Azioni'},
   {id:'holdFeed',l:'Espelli massa continuo (tieni premuto)',g:'Azioni'},
+  {id:'dash',l:'Dash velocità (7s, ricarica 30s)',g:'Azioni'},
   {id:'pause',l:'Pausa',g:'Gioco'},
   {id:'respawn',l:'Rigioca dopo la morte',g:'Gioco'},
   {id:'menu',l:'Menu di gioco',g:'Gioco'},
@@ -424,7 +471,7 @@ const FOOD_SCALE={small:.75,normal:1,large:1.4};
 const BG_COLORS={default:['#dfe3e5','#151a20'],blue:['#d6e6f5','#0f1a2a'],green:['#dcebd8','#122017'],sand:['#efe6d2','#241f14'],white:['#ffffff','#000000']};
 let rebinding=null;
 function bgColor(){const m=BG_COLORS[S.bgColor]||BG_COLORS.default;return S.theme==='dark'?m[1]:m[0]}
-function actionForCode(code){if(!code)return null;for(const a of ACTIONS)if(S.keys[a.id]===code)return a.id;return null}
+function actionForCode(code){if(!code)return null;for(const a of ACTIONS)if(S.keys[a.id]===code)return a.id;if(code==='ShiftRight'&&S.keys.dash==='ShiftLeft')return 'dash';return null}
 function keyLabel(c){
   if(!c)return '—';
   const m={Space:'SPAZIO',Escape:'ESC',Enter:'INVIO',Equal:'+',Minus:'-',Backspace:'⌫',Tab:'TAB',ShiftLeft:'SHIFT',ShiftRight:'SHIFT',ControlLeft:'CTRL',ControlRight:'CTRL',ArrowUp:'↑',ArrowDown:'↓',ArrowLeft:'←',ArrowRight:'→',Backquote:'`',Comma:',',Period:'.',Slash:'/',Semicolon:';',Quote:"'",BracketLeft:'[',BracketRight:']',Backslash:'\\'};
@@ -459,6 +506,7 @@ function runAction(a){
     case 'tripleSplit':multiSplit(3);break;
     case 'maxSplit':multiSplit(4);break;
     case 'eject':eject();break;
+    case 'dash':startDash();break;
     case 'pause':togglePause();break;
     case 'respawn':if(state.gameOver&&!state.playing)respawn();break;
     case 'menu':openSheet(state.playing?'pause':'settings');break;
@@ -931,7 +979,7 @@ function startGame(){
   state.nick=(state.profile?.username||state.profile?.name||document.getElementById('nick').value||'ZeroPlayer').trim().slice(0,20)||'ZeroPlayer';
   state.playing=true;state.spectating=false;state.gameOver=false;state.paused=false;state.rewarded=false;
   state.score=startMass();state.kills=0;state.foodEaten=0;
-  state.fx={speed:0,shield:2*upLvl('shield'),magnet:0,double:0};state.combo=0;state.comboT=0;state.bestCombo=0;state.runTime=0;state.particles=[];state.feed=[];
+  state.fx={speed:0,shield:2*upLvl('shield'),magnet:0,double:0};state.dash={t:0,cd:0};state.dashAcc=0;state.flash=0;state.combo=0;state.comboT=0;state.bestCombo=0;state.runTime=0;state.particles=[];state.feed=[];
   renderFeed();renderPowerups();
   document.getElementById('pauseBox').style.display='none';
   const spawn={x:rand(1300,4700),y:rand(1300,4700)};
@@ -1065,7 +1113,7 @@ function update(dt){
     /* ogni cellula punta al cursore, rallentando quando ci arriva sopra */
     const dx=wm.x-c.x,dy=wm.y-c.y,dist=Math.hypot(dx,dy)||1;
     const k=Math.min(1,dist/Math.max(DEAD_ZONE[S.deadZone]||40,c.r));
-    const localSpeed=clamp(520/Math.sqrt(c.m)*35,45,300)*(state.fx.speed>0?1.6:1)*speedMul()*k*(arrows.stop?0:1);
+    const localSpeed=clamp(520/Math.sqrt(c.m)*35,45,300)*(state.fx.speed>0?1.6:1)*(state.dash.t>0?1.8:1)*speedMul()*k*(arrows.stop?0:1);
     c.vx+=(dx/dist*localSpeed-c.vx)*Math.min(1,dt*6);
     c.vy+=(dy/dist*localSpeed-c.vy)*Math.min(1,dt*6);
     /* la spinta dello split decade in modo esponenziale, indipendente dallo sterzo */
@@ -1180,6 +1228,7 @@ function draw(){
     if(c.r*z>22){ctx.fillStyle='#fff';ctx.font='bold 13px Arial';ctx.textAlign='center';if(S.names)ctx.fillText(state.nick,p.x,p.y+(S.mass?-1:4));if(S.mass)ctx.fillText(Math.floor(c.m),p.x,p.y+(S.names?14:4))}
     drawCellFx(c,p,z);drawCellExtras(c,p,z);
   }
+  drawDashFx();
   drawCursorLine();
   drawScoreHud();
   drawMinimap();
@@ -1254,6 +1303,7 @@ document.getElementById('miniBtn').onclick=toggleMinimap;
 document.getElementById('pauseBtn').onclick=togglePause;
 document.getElementById('tsplit').onclick=split;
 document.getElementById('teject').onclick=eject;
+document.getElementById('tdash').onclick=startDash;
 document.querySelectorAll('.mode button').forEach(b=>b.onclick=()=>{
   document.querySelectorAll('.mode button').forEach(x=>x.classList.remove('on'));
   b.classList.add('on');state.mode=b.dataset.mode;
@@ -1500,7 +1550,7 @@ function renderCollection(){
   if(cfg.skin_upload_enabled==='1'){
     const up=el('div','opt'),col=el('div');col.style.width='100%';
     col.appendChild(el('div','','⬆️ Carica una skin personalizzata'));
-    col.appendChild(el('small','','PNG, JPG, GIF animata o WEBP · da 16 a 1024 px · max '+cfg.skin_max_kb+' KB · fino a '+cfg.skin_max_per_user+' skin'+(cfg.skin_auto_approve==='1'?'':' · approvata da un moderatore')));
+    col.appendChild(el('small','','PNG, JPG, GIF animata o WEBP · qualsiasi dimensione · max '+(+cfg.skin_max_kb>=1024?Math.round(cfg.skin_max_kb/1024)+' MB':cfg.skin_max_kb+' KB')+' · fino a '+cfg.skin_max_per_user+' skin'+(cfg.skin_auto_approve==='1'?'':' · approvata da un moderatore')));
     const fi=document.createElement('input');fi.type='file';fi.accept='image/png,image/jpeg,image/gif,image/webp';fi.style.cssText='display:block;margin:8px 0;max-width:100%';
     const nm=document.createElement('input');nm.maxLength=24;nm.placeholder='Nome skin';nm.style.cssText='width:100%;padding:8px;border:1px solid #bbb;border-radius:6px;margin-bottom:8px';
     const go=el('button','green','Carica');go.style.width='100%';
