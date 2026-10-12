@@ -191,6 +191,7 @@ state.zoomMul=1;state.feedAcc=0;state.dash={t:0,cd:0};state.dashAcc=0;state.flas
 state.cd={blink:0,barrier:0,shock:0,shadow:0};state.inv=0;state.shadow=0;state.revives=0;state.won=false;state.myTeam=null;
 state.mm={t:0,ev:30,wave:1,surge:0,zx:3000,zy:3000,zr:4200,tm:[0,0,0]};
 state.eco=null;state.allies=[];state.remoteSkins={};state.rewarded=false;state.skinTimer=null;
+state.rIv=120;state.arenaGen=0;
 function esc(s){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
 function rand(a,b){return a+Math.random()*(b-a)}
 function clamp(v,a,b){return Math.max(a,Math.min(b,v))}
@@ -724,7 +725,7 @@ function screenshot(){
 }
 function focusChat(){
   const i=document.getElementById('arenaChatInput');
-  if(state.arenaJoined&&S.chat&&i)i.focus();else toast('Chat non disponibile');
+  if(state.arenaJoined&&S.chat&&i)i.focus({preventScroll:true});else toast('Chat non disponibile');
 }
 function runAction(a){
   switch(a){
@@ -1152,14 +1153,28 @@ function resetWorld(){
 
 /* ----- Arena multiplayer ----- */
 function arenaCellsPayload(){return state.cells.map(c=>({x:c.x,y:c.y,m:c.m,r:c.r,color:c.color,team:c.team}))}
-/* Mantiene per ogni giocatore remoto la posizione "visibile" (p.vis) che viene interpolata nel disegno:
-   così il movimento è fluido anche se le risposte del server arrivano a intervalli irregolari. */
+/* Giocatori remoti: per ognuno si conserva una breve storia di "istantanee" (posizione + istante di arrivo).
+   Il disegno li mostra con un piccolo ritardo, interpolando tra due istantanee: così il movimento è fluido
+   anche se il server risponde a intervalli irregolari (prima si usava un inseguimento esponenziale che andava a scatti). */
 function updateRemotePlayers(players){
-  const old=state.remotePlayers,map={};
+  const old=state.remotePlayers,map={},t=now();
   for(const p of (players||[])){
     if(p.self||!p.alive)continue;
     const prev=old[p.id];
-    p.vis=(prev&&prev.vis)?prev.vis:[];
+    p.snaps=(prev&&prev.snaps)?prev.snaps:[];
+    const cells=(p.cells||[]).map(c=>({x:+c.x||0,y:+c.y||0,r:Number(c.r)||massToRadius(c.m||10)}));
+    const last=p.snaps[p.snaps.length-1];
+    const same=last&&last.c.length===cells.length&&cells.every((c,i)=>c.x===last.c[i].x&&c.y===last.c[i].y&&c.r===last.c[i].r);
+    if(!same){
+      if(last){
+        const iv=t-last.t;
+        /* dopo una pausa (giocatore fermo) si inserisce un punto "fermo" appena prima, così non c'è uno scatto */
+        if(iv>state.rIv*2.2)p.snaps.push({t:t-state.rIv,c:last.c});
+        else state.rIv=state.rIv*.85+clamp(iv,30,400)*.15;
+      }
+      p.snaps.push({t,c:cells});
+      while(p.snaps.length>8)p.snaps.shift();
+    }
     map[p.id]=p;
   }
   state.remotePlayers=map;
@@ -1221,28 +1236,59 @@ async function sendArenaChat(text){
   try{const r=await arenaCall('chat',{text});if(r?.success)await arenaSync(true)}
   catch(e){toast(e.message||'Chat non disponibile')}
 }
-function stopArenaTimers(){clearInterval(state.arenaTimer);clearInterval(state.arenaUpdateTimer);clearInterval(state.skinTimer);state.arenaTimer=null;state.arenaUpdateTimer=null;state.skinTimer=null}
+function stopArenaTimers(){state.arenaGen++;clearInterval(state.arenaTimer);clearTimeout(state.arenaUpdateTimer);clearInterval(state.skinTimer);state.arenaTimer=null;state.arenaUpdateTimer=null;state.skinTimer=null}
 function startArenaTimers(){
   stopArenaTimers();
+  const gen=state.arenaGen;
   state.arenaTimer=setInterval(()=>{if(!state.arenaJoined&&state.playing)arenaJoin();else arenaSync()},350);
-  state.arenaUpdateTimer=setInterval(()=>arenaUpdate(),120);
+  /* ciclo di aggiornamento posizione: una nuova richiesta parte ~100ms dopo l'inizio della precedente,
+     senza "saltare" cicli come faceva il vecchio setInterval quando la risposta tardava */
+  const loop=async()=>{
+    if(gen!==state.arenaGen)return;
+    const t0=now();
+    await arenaUpdate();
+    if(gen!==state.arenaGen)return;
+    state.arenaUpdateTimer=setTimeout(loop,Math.max(0,100-(now()-t0)));
+  };
+  loop();
   state.skinTimer=setInterval(fetchRemoteSkins,6000);
 }
-/* Disegno dei giocatori remoti con interpolazione esponenziale verso l'ultima posizione ricevuta */
+/* Posizione di un giocatore remoto all'istante rt: interpolazione tra istantanee (con breve estrapolazione se i dati sono in ritardo) */
+function remotePose(p,rt){
+  const s=p.snaps;if(!s||!s.length)return null;
+  const last=s[s.length-1];
+  if(rt>=last.t){
+    const prev=s[s.length-2];
+    if(!prev||prev.c.length!==last.c.length||last.t-prev.t<20)return last.c;
+    const span=last.t-prev.t,k=Math.min(rt-last.t,120)/span;
+    return last.c.map((c,i)=>{
+      const q=prev.c[i],dx=c.x-q.x,dy=c.y-q.y;
+      if(Math.hypot(dx,dy)>900)return c;
+      return{x:c.x+dx*k,y:c.y+dy*k,r:c.r};
+    });
+  }
+  if(rt<=s[0].t)return s[0].c;
+  let i=s.length-2;
+  while(i>0&&s[i].t>rt)i--;
+  const a=s[i],b=s[i+1];
+  if(a.c.length!==b.c.length)return b.c;
+  const f=clamp((rt-a.t)/Math.max(1,b.t-a.t),0,1);
+  return b.c.map((c,j)=>{
+    const q=a.c[j];
+    if(Math.hypot(c.x-q.x,c.y-q.y)>900)return c;
+    return{x:q.x+(c.x-q.x)*f,y:q.y+(c.y-q.y)*f,r:q.r+(c.r-q.r)*f};
+  });
+}
+/* Disegno dei giocatori remoti, mostrati con un ritardo di ~1,6 intervalli di aggiornamento (min 110ms, max 350ms) */
 function drawRemotePlayers(){
-  const z=state.camera.zoom,t=now(),dt=Math.min(.1,(t-(drawRemotePlayers.t||t))/1000);
-  drawRemotePlayers.t=t;
-  const k=1-Math.exp(-dt*10);
+  const z=state.camera.zoom,rt=now()-clamp(state.rIv*1.6,110,350);
   for(const p of Object.values(state.remotePlayers)){
-    const cells=p.cells||[],vis=p.vis||(p.vis=[]);
-    vis.length=cells.length;
-    for(let i=0;i<cells.length;i++){
-      const c=cells[i],tr=Number(c.r)||massToRadius(c.m||10);
-      let v=vis[i];
-      if(!v||Math.hypot(v.x-c.x,v.y-c.y)>900)v=vis[i]={x:c.x,y:c.y,r:tr};
-      else{v.x+=(c.x-v.x)*k;v.y+=(c.y-v.y)*k;v.r+=(tr-v.r)*k}
-      const q=screenPoint(v.x,v.y),r=Math.max(5,v.r)*z;
-      drawSkinCell(q,r,c.color||p.color||'#ef476f',remoteSkin(p));
+    const pose=remotePose(p,rt);if(!pose)continue;
+    const raw=p.cells||[];
+    for(let i=0;i<pose.length;i++){
+      const v=pose[i],q=screenPoint(v.x,v.y),r=Math.max(5,v.r)*z;
+      const col=(raw[i]&&raw[i].color)||p.color||'#ef476f';
+      drawSkinCell(q,r,col,remoteSkin(p));
       if(S.names&&r>22){ctx.fillStyle='#fff';ctx.font='bold 13px Arial';ctx.textAlign='center';ctx.fillText(p.username,q.x,q.y+4)}
     }
   }
@@ -1605,7 +1651,8 @@ document.getElementById('arenaChatForm').addEventListener('submit',e=>{
   e.preventDefault();
   const inp=document.getElementById('arenaChatInput');
   const t=inp.value;inp.value='';
-  sendArenaChat(t);
+  if(t.trim())sendArenaChat(t);
+  inp.blur(); /* Invio apre la chat, Invio di nuovo invia e torna subito al gioco */
 });
 document.querySelectorAll('.chat-emotes [data-emote]').forEach(b=>b.addEventListener('click',()=>{
   const inp=document.getElementById('arenaChatInput');
