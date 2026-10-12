@@ -184,7 +184,7 @@ const state={
   foods:[],ejected:[],viruses:[],bots:[],cells:[],camera:{x:3000,y:3000,zoom:1},mouse:{x:W/2,y:H/2},
   score:0,best:0,plays:0,kills:0,foodEaten:0,time:0,lastFrame:0,lastSave:0,leaderTick:0,minimap:true,partyCode:'',
   remotePlayers:{},arenaJoined:false,arenaSyncBusy:false,arenaUpdateBusy:false,chatSince:0,arenaTimer:null,arenaUpdateTimer:null,
-  serverLeaders:[],saving:false,rafId:0,
+  serverLeaders:[],saving:false,rafId:0,lastUpd:0,
   pickups:[],fx:{speed:0,shield:0,magnet:0,double:0},combo:0,comboT:0,bestCombo:0,particles:[],feed:[],runTime:0
 };
 state.zoomMul=1;state.feedAcc=0;state.dash={t:0,cd:0};state.dashAcc=0;state.flash=0;
@@ -819,6 +819,7 @@ function drawScoreHud(){
   ctx.strokeStyle=S.theme==='dark'?'rgba(0,0,0,.6)':'rgba(255,255,255,.85)';ctx.strokeText(t,W/2,72);
   ctx.fillStyle=S.theme==='dark'?'#e8ecf1':'#222';ctx.fillText(t,W/2,72);
 }
+/* Minimappa: i giocatori online sono disegnati con un punto ben visibile (raggio minimo 4px) e anello bianco */
 function drawMinimap(){
   if(!state.minimap)return;
   const MS=mini.width,k=MS/state.world;
@@ -828,8 +829,23 @@ function drawMinimap(){
   const z=state.camera.zoom,vw=W/z*k,vh=H/z*k;
   mctx.strokeStyle='rgba(19,184,239,.85)';mctx.strokeRect(state.camera.x*k-vw/2,state.camera.y*k-vh/2,vw,vh);
   for(const b of state.bots){mctx.fillStyle=b.color;mctx.fillRect(b.x*k-1,b.y*k-1,2,2)}
-  for(const p of Object.values(state.remotePlayers)){for(const c of (p.cells||[])){mctx.fillStyle=c.color||p.color||'#ef476f';mctx.fillRect(c.x*k-1.5,c.y*k-1.5,3,3)}}
-  for(const c of state.cells){mctx.fillStyle=c.color;mctx.beginPath();mctx.arc(c.x*k,c.y*k,3,0,Math.PI*2);mctx.fill()}
+  for(const p of Object.values(state.remotePlayers)){
+    const cs=p.cells||[];
+    for(const c of cs){
+      const rr=Math.max(4,(Number(c.r)||massToRadius(c.m||10))*k);
+      mctx.beginPath();mctx.arc(c.x*k,c.y*k,rr,0,Math.PI*2);
+      mctx.fillStyle='#ff3f58';mctx.fill();
+      mctx.lineWidth=1.5;mctx.strokeStyle='#fff';mctx.stroke();
+    }
+    if(cs.length){
+      let best=cs[0];for(const c of cs)if((c.m||0)>(best.m||0))best=c;
+      mctx.font='bold 9px Arial';mctx.textAlign='center';mctx.lineWidth=3;
+      mctx.strokeStyle=S.theme==='dark'?'rgba(0,0,0,.8)':'rgba(255,255,255,.9)';
+      mctx.strokeText(p.username||'',best.x*k,best.y*k-7);
+      mctx.fillStyle=S.theme==='dark'?'#e8ecf1':'#111';mctx.fillText(p.username||'',best.x*k,best.y*k-7);
+    }
+  }
+  for(const c of state.cells){mctx.fillStyle=c.color;mctx.beginPath();mctx.arc(c.x*k,c.y*k,Math.max(3,c.r*k),0,Math.PI*2);mctx.fill();mctx.strokeStyle='#0876d1';mctx.lineWidth=1;mctx.stroke()}
   mctx.fillStyle=S.theme==='dark'?'#e8ecf1':'#111';mctx.font='9px Arial';mctx.textAlign='left';mctx.fillText(state.mode.toUpperCase(),6,MS-5);
 }
 const SCHEMA=[
@@ -1101,12 +1117,18 @@ async function saveProgress(force=false){
   }finally{state.saving=false}
 }
 
+/* Classifica: record salvati nel database + giocatori ONLINE adesso (con il loro punteggio live) + tu.
+   Un giocatore live sostituisce il suo record salvato; i live sono marcati con un pallino verde. */
 function updateLeaders(){
   const real=Array.isArray(state.serverLeaders)?state.serverLeaders:[];
-  let vals=real.filter(v=>String(v.username||'').toLowerCase()!==String(state.nick||'').toLowerCase());
-  vals.push({username:state.nick||'Tu',score:Math.floor(state.score),me:true});
+  const meName=String(state.nick||'').toLowerCase();
+  const live=Object.values(state.remotePlayers||{}).map(p=>({username:String(p.username||'?'),score:Math.floor(+p.score||0),live:true}));
+  const liveNames=new Set(live.map(v=>v.username.toLowerCase()));
+  let vals=real.filter(v=>{const n=String(v.username||'').toLowerCase();return n!==meName&&!liveNames.has(n)});
+  vals=vals.concat(live);
+  vals.push({username:state.nick||'Tu',score:Math.floor(state.score),me:true,live:state.playing});
   vals.sort((a,b)=>(+b.score||0)-(+a.score||0));
-  document.getElementById('leaders').innerHTML=vals.slice(0,10).map((v,i)=>`<div class="row ${v.me?'me':''}"><span>${i+1}. ${esc(v.username||'')}</span><b>${Math.floor(+v.score||0)}</b></div>`).join('');
+  document.getElementById('leaders').innerHTML=vals.slice(0,10).map((v,i)=>`<div class="row ${v.me?'me':''}"><span>${i+1}. ${v.live&&!v.me?'<span style="color:#58d100">●</span> ':''}${esc(v.username||'')}</span><b>${Math.floor(+v.score||0)}</b></div>`).join('');
 }
 
 function food(){return{x:rand(50,state.world-50),y:rand(50,state.world-50),r:rand(3,6),m:8,c:palette[(Math.random()*palette.length)|0]}}
@@ -1130,11 +1152,18 @@ function resetWorld(){
 
 /* ----- Arena multiplayer ----- */
 function arenaCellsPayload(){return state.cells.map(c=>({x:c.x,y:c.y,m:c.m,r:c.r,color:c.color,team:c.team}))}
+/* Mantiene per ogni giocatore remoto la posizione "visibile" (p.vis) che viene interpolata nel disegno:
+   così il movimento è fluido anche se le risposte del server arrivano a intervalli irregolari. */
 function updateRemotePlayers(players){
-  const map={};
-  for(const p of (players||[])){if(!p.self&&p.alive)map[p.id]=p}
+  const old=state.remotePlayers,map={};
+  for(const p of (players||[])){
+    if(p.self||!p.alive)continue;
+    const prev=old[p.id];
+    p.vis=(prev&&prev.vis)?prev.vis:[];
+    map[p.id]=p;
+  }
   state.remotePlayers=map;
-  const el=document.getElementById('arenaOnline');if(el)el.textContent=((players||[]).length||0)+' online';
+  const e=document.getElementById('arenaOnline');if(e)e.textContent=((players||[]).length||0)+' online';
 }
 function renderArenaChat(messages){
   const box=document.getElementById('arenaChatBody');if(!box||!Array.isArray(messages))return;
@@ -1163,8 +1192,9 @@ async function arenaUpdate(){
     if(r?.dead){state.arenaJoined=false;die('Sei stato divorato da un giocatore online');return}
     if(Number.isFinite(Number(r?.server_score)))state.score=Math.max(state.score,Number(r.server_score));
     updateRemotePlayers(r.players||[]);
+    state.lastUpd=now();
   }catch(e){
-    if(String(e.message).includes('join')){state.arenaJoined=false;arenaJoin()}
+    if(/arena|join/i.test(String(e.message))){state.arenaJoined=false;arenaJoin()}
   }finally{state.arenaUpdateBusy=false}
 }
 async function arenaSync(force=false){
@@ -1172,7 +1202,11 @@ async function arenaSync(force=false){
   state.arenaSyncBusy=true;
   try{
     const r=await arenaCall('sync',{since:force?0:state.chatSince});
-    if(r?.success){updateRemotePlayers(r.players||[]);renderArenaChat(r.messages||[]);if(r.last_chat)state.chatSince=r.last_chat}
+    if(r?.success){
+      /* le posizioni arrivano da update (più frequente): sync le usa solo se update è fermo da più di 1s */
+      if(force||!state.lastUpd||now()-state.lastUpd>1000)updateRemotePlayers(r.players||[]);
+      renderArenaChat(r.messages||[]);if(r.last_chat)state.chatSince=r.last_chat;
+    }
   }catch(e){}finally{state.arenaSyncBusy=false}
 }
 async function arenaLeave(){
@@ -1190,16 +1224,24 @@ async function sendArenaChat(text){
 function stopArenaTimers(){clearInterval(state.arenaTimer);clearInterval(state.arenaUpdateTimer);clearInterval(state.skinTimer);state.arenaTimer=null;state.arenaUpdateTimer=null;state.skinTimer=null}
 function startArenaTimers(){
   stopArenaTimers();
-  state.arenaTimer=setInterval(()=>arenaSync(),350);
+  state.arenaTimer=setInterval(()=>{if(!state.arenaJoined&&state.playing)arenaJoin();else arenaSync()},350);
   state.arenaUpdateTimer=setInterval(()=>arenaUpdate(),120);
   state.skinTimer=setInterval(fetchRemoteSkins,6000);
 }
+/* Disegno dei giocatori remoti con interpolazione esponenziale verso l'ultima posizione ricevuta */
 function drawRemotePlayers(){
-  const z=state.camera.zoom;
+  const z=state.camera.zoom,t=now(),dt=Math.min(.1,(t-(drawRemotePlayers.t||t))/1000);
+  drawRemotePlayers.t=t;
+  const k=1-Math.exp(-dt*10);
   for(const p of Object.values(state.remotePlayers)){
-    for(const c of (p.cells||[])){
-      const q=screenPoint(c.x,c.y);
-      const r=Math.max(5,Number(c.r||massToRadius(c.m||10)))*z;
+    const cells=p.cells||[],vis=p.vis||(p.vis=[]);
+    vis.length=cells.length;
+    for(let i=0;i<cells.length;i++){
+      const c=cells[i],tr=Number(c.r)||massToRadius(c.m||10);
+      let v=vis[i];
+      if(!v||Math.hypot(v.x-c.x,v.y-c.y)>900)v=vis[i]={x:c.x,y:c.y,r:tr};
+      else{v.x+=(c.x-v.x)*k;v.y+=(c.y-v.y)*k;v.r+=(tr-v.r)*k}
+      const q=screenPoint(v.x,v.y),r=Math.max(5,v.r)*z;
       drawSkinCell(q,r,c.color||p.color||'#ef476f',remoteSkin(p));
       if(S.names&&r>22){ctx.fillStyle='#fff';ctx.font='bold 13px Arial';ctx.textAlign='center';ctx.fillText(p.username,q.x,q.y+4)}
     }
