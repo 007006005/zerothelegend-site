@@ -11,25 +11,7 @@ declare(strict_types=1);
  * L'utente viene riconosciuto chiamando il tuo ../api/api.php?action=me con i cookie della sessione.
  */
 
-/* Cartella dati: usa la prima posizione scrivibile tra quelle elencate */
-function za_pick_dir(): string
-{
-    $cands = [
-        __DIR__ . '/zeroagar_data',
-        dirname(__DIR__) . '/uploads/zeroagar_data',
-        sys_get_temp_dir() . '/zeroagar_data',
-    ];
-    foreach ($cands as $d) {
-        if (!is_dir($d)) {
-            @mkdir($d, 0775, true);
-        }
-        if (is_dir($d) && is_writable($d)) {
-            return $d;
-        }
-    }
-    return $cands[0];
-}
-define('ZA_DATA_DIR', za_pick_dir());
+const ZA_DATA_DIR = __DIR__ . '/zeroagar_data';
 const ZA_ME_URL = '';   // lascia vuoto per usare automaticamente ../api/api.php?action=me
 const ZA_ADMIN_ROLES = ['admin', 'administrator', 'owner', 'superadmin', 'founder'];
 const ZA_MOD_ROLES = ['mod', 'moderator', 'staff'];
@@ -121,7 +103,7 @@ function setting_defaults(): array
     return [
         'skin_upload_enabled' => '1',
         'skin_auto_approve' => '0',
-        'skin_max_kb' => '10240',
+        'skin_max_kb' => '1024',
         'skin_max_per_user' => '5',
         'payments_mode' => 'off',      // off | demo | external
         'payment_url' => '',
@@ -145,10 +127,6 @@ function settings_all(bool $reset = false): array
         $cache = setting_defaults();
         foreach (db()->query('SELECT k,v FROM settings') as $r) {
             $cache[$r['k']] = (string)$r['v'];
-        }
-        /* il vecchio limite predefinito (1 MB) passa automaticamente a 10 MB */
-        if (($cache['skin_max_kb'] ?? '') === '1024') {
-            $cache['skin_max_kb'] = '10240';
         }
     }
     return $cache;
@@ -261,7 +239,6 @@ function diag(): void
         'me_ruolo' => is_array($j) ? (string)(($j['profile']['role'] ?? $j['user']['role'] ?? '(nessun ruolo)')) : null,
         'curl' => function_exists('curl_init'),
         'pdo_sqlite' => in_array('sqlite', PDO::getAvailableDrivers(), true),
-        'cartella_dati' => ZA_DATA_DIR,
         'cartella_dati_scrivibile' => is_dir(ZA_DATA_DIR) && is_writable(ZA_DATA_DIR),
         'db_ok' => $dbOk,
         'db_errore' => $dbErr,
@@ -409,12 +386,6 @@ function catalog_base(): array
             'toxic' => ['name' => 'Tossico', 'price' => 500],
             'sunset' => ['name' => 'Tramonto', 'price' => 450],
             'galaxy' => ['name' => 'Galassia', 'price' => 0, 'pass' => true],
-            'aurora' => ['name' => 'Aurora', 'price' => 700],
-            'ocean' => ['name' => 'Oceano', 'price' => 550],
-            'candy' => ['name' => 'Caramella', 'price' => 650],
-            'shadow' => ['name' => 'Ombra', 'price' => 900],
-            'fire' => ['name' => 'Fuoco', 'price' => 1000],
-            'matrix' => ['name' => 'Matrix', 'price' => 1200],
         ],
         'upgrades' => [
             'start' => ['name' => 'Massa iniziale', 'desc' => '+10 massa alla nascita per livello', 'max' => 5, 'base' => 300],
@@ -425,17 +396,10 @@ function catalog_base(): array
             'merge' => ['name' => 'Fusione rapida', 'desc' => '-4% timer di riunione', 'max' => 5, 'base' => 600],
             'xp' => ['name' => 'XP extra', 'desc' => '+10% XP a fine partita', 'max' => 5, 'base' => 700],
             'coin' => ['name' => 'Coin extra', 'desc' => '+10% Zero Coin a fine partita', 'max' => 5, 'base' => 900],
-            'feast' => ['name' => 'Banchetto', 'desc' => '+8% massa dal cibo per livello', 'max' => 5, 'base' => 500],
-            'vampire' => ['name' => 'Vampiro', 'desc' => '+6% massa extra dai rivali divorati', 'max' => 5, 'base' => 650],
-            'regen' => ['name' => 'Rigenerazione', 'desc' => '+0,25% massa al secondo per livello (max +4/s per livello)', 'max' => 5, 'base' => 800],
-            'cdr' => ['name' => 'Ricarica rapida', 'desc' => '-6% ricarica di Dash e abilità per livello', 'max' => 5, 'base' => 750],
-            'radar' => ['name' => 'Radar', 'desc' => 'Frecce verso minacce e prede, raggio crescente', 'max' => 3, 'base' => 900],
-            'revive' => ['name' => 'Seconda vita', 'desc' => 'Rinasci con metà massa (1 volta per livello)', 'max' => 2, 'base' => 1500],
         ],
         'bots' => [
             'collector' => ['name' => 'Bot Raccoglitore', 'desc' => 'Raccoglie cibo e ti dona massa', 'price' => 900],
             'hunter' => ['name' => 'Bot Cacciatore', 'desc' => 'Caccia i bot nemici e ti dona massa', 'price' => 1400],
-            'guardian' => ['name' => 'Bot Guardiano', 'desc' => 'Orbita attorno a te e respinge i nemici vicini', 'price' => 1800],
         ],
         'packs' => [
             's' => ['label' => 'Manciata', 'coins' => 500, 'cents' => 99],
@@ -822,7 +786,7 @@ function main(): void
             if (!$f || (int)$f['error'] !== UPLOAD_ERR_OK || !is_uploaded_file((string)$f['tmp_name'])) {
                 fail('Upload non riuscito');
             }
-            $maxKb = min(10240, max(32, (int)setting('skin_max_kb')));   // tetto: 10 MB
+            $maxKb = max(32, (int)setting('skin_max_kb'));
             if ((int)$f['size'] > $maxKb * 1024) {
                 fail("File troppo pesante (massimo $maxKb KB)");
             }
@@ -837,8 +801,8 @@ function main(): void
             }
             $w = (int)$info[0];
             $h = (int)$info[1];
-            if ($w < 16 || $h < 16) {
-                fail('Immagine troppo piccola (minimo 16x16 pixel)');
+            if ($w < 16 || $h < 16 || $w > 1024 || $h > 1024) {
+                fail('Dimensioni consentite: da 16x16 a 1024x1024 pixel');
             }
             $ext = ['image/png' => 'png', 'image/jpeg' => 'jpg', 'image/gif' => 'gif', 'image/webp' => 'webp'][$info['mime']] ?? null;
             if (!$ext) {
@@ -902,7 +866,6 @@ function main(): void
             $kills = max(0, min(200, (int)($b['kills'] ?? 0)));
             $food = max(0, min(3000, (int)($b['food'] ?? 0)));
             $secs = max(0, min(3600, (int)($b['seconds'] ?? 0)));
-            $won = !empty($b['won']);
             $res = ['coins' => 0, 'xp' => 0, 'pass' => 0, 'levelUp' => false];
             if ($secs >= 15 && $now - (int)$p['last_game'] >= 15) {
                 $um = jget($p, 'upgrades');
@@ -912,11 +875,6 @@ function main(): void
                 $xp = (int)floor($xp * (float)setting('xp_mult') * ev_mult('xp') * (1 + 0.1 * (int)($um['xp'] ?? 0)));
                 $pp = min(60, intdiv($score, 60) + $kills * 2 + 5);
                 $pp = (int)floor($pp * (float)setting('pass_mult') * ev_mult('pass'));
-                if ($won && $secs >= 60) {   // bonus vittoria (Survivor, Zombie, Party)
-                    $coins += 60;
-                    $xp += 80;
-                    $pp += 10;
-                }
                 $old = level_from_xp((int)$p['xp']);
                 $p['xp'] = (int)$p['xp'] + $xp;
                 $new = level_from_xp((int)$p['xp']);
