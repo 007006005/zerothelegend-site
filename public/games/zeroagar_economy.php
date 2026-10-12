@@ -15,6 +15,7 @@ const ZA_DATA_DIR = __DIR__ . '/zeroagar_data';
 const ZA_ME_URL = '';   // lascia vuoto per usare automaticamente ../api/api.php?action=me
 const ZA_ADMIN_ROLES = ['admin', 'administrator', 'owner', 'superadmin', 'founder'];
 const ZA_MOD_ROLES = ['mod', 'moderator', 'staff'];
+const ZA_DIAG = true;   // metti false dopo aver risolto
 const ZA_PASS_TIERS = 30;
 const ZA_PASS_STEP = 100;
 
@@ -159,31 +160,43 @@ function me_url(): string
     return ($https ? 'https' : 'http') . '://' . ($_SERVER['HTTP_HOST'] ?? 'localhost') . $dir . '/api/api.php?action=me';
 }
 
-function fetch_me(string $cookie): ?array
+/* Chiamata HTTP verso api.php?action=me con i cookie dell'utente. Ritorna [codice HTTP, corpo] */
+function me_request(string $url, string $cookie): array
 {
-    $url = me_url();
-    $raw = false;
     if (function_exists('curl_init')) {
         $ch = curl_init($url);
         curl_setopt_array($ch, [
             CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_TIMEOUT => 5,
+            CURLOPT_TIMEOUT => 6,
             CURLOPT_CONNECTTIMEOUT => 3,
             CURLOPT_HTTPHEADER => ['Cookie: ' . $cookie, 'Accept: application/json'],
             CURLOPT_SSL_VERIFYPEER => false,
             CURLOPT_SSL_VERIFYHOST => 0,
-            CURLOPT_FOLLOWLOCATION => false,
+            CURLOPT_FOLLOWLOCATION => true,   // molti host forzano http -> https
+            CURLOPT_MAXREDIRS => 3,
         ]);
         $raw = curl_exec($ch);
+        $code = (int)curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
         curl_close($ch);
-    } else {
-        $ctx = stream_context_create(['http' => ['header' => "Cookie: $cookie\r\nAccept: application/json\r\n", 'timeout' => 5]]);
-        $raw = @file_get_contents($url, false, $ctx);
+        return [$code, is_string($raw) ? $raw : ''];
     }
-    if (!is_string($raw) || $raw === '') {
-        return null;
+    $ctx = stream_context_create(['http' => ['header' => "Cookie: $cookie\r\nAccept: application/json\r\n", 'timeout' => 6, 'follow_location' => 1]]);
+    $raw = @file_get_contents($url, false, $ctx);
+    return [is_string($raw) ? 200 : 0, is_string($raw) ? $raw : ''];
+}
+
+function fetch_me(string $cookie): ?array
+{
+    $url = me_url();
+    $alt = strpos($url, 'https://') === 0 ? 'http://' . substr($url, 8) : 'https://' . substr($url, 7);
+    $j = null;
+    foreach ([$url, $alt] as $u) {
+        [, $raw] = me_request($u, $cookie);
+        $j = json_decode($raw, true);
+        if (is_array($j)) {
+            break;
+        }
     }
-    $j = json_decode($raw, true);
     if (!is_array($j)) {
         return null;
     }
@@ -202,6 +215,38 @@ function fetch_me(string $cookie): ?array
     return ['uid' => $uid, 'name' => mb_substr($name !== '' ? $name : $uid, 0, 40), 'role' => strtolower((string)($m['role'] ?? 'user'))];
 }
 
+/* Diagnostica: apri zeroagar_economy.php?action=diag nel browser (da loggato). Poi puoi rimettere ZA_DIAG a false. */
+function diag(): void
+{
+    $cookie = (string)($_SERVER['HTTP_COOKIE'] ?? '');
+    $url = me_url();
+    [$code, $raw] = $cookie !== '' ? me_request($url, $cookie) : [0, ''];
+    $j = json_decode($raw, true);
+    $dbOk = true;
+    $dbErr = '';
+    try {
+        db();
+    } catch (Throwable $e) {
+        $dbOk = false;
+        $dbErr = $e->getMessage();
+    }
+    out(['diag' => [
+        'php' => PHP_VERSION,
+        'me_url' => $url,
+        'cookie_ricevuto' => $cookie !== '',
+        'me_http_code' => $code,
+        'me_json_valido' => is_array($j),
+        'me_ruolo' => is_array($j) ? (string)(($j['profile']['role'] ?? $j['user']['role'] ?? '(nessun ruolo)')) : null,
+        'curl' => function_exists('curl_init'),
+        'pdo_sqlite' => in_array('sqlite', PDO::getAvailableDrivers(), true),
+        'cartella_dati_scrivibile' => is_dir(ZA_DATA_DIR) && is_writable(ZA_DATA_DIR),
+        'db_ok' => $dbOk,
+        'db_errore' => $dbErr,
+        'ruoli_admin' => ZA_ADMIN_ROLES,
+        'ruoli_mod' => ZA_MOD_ROLES,
+    ]]);
+}
+
 function resolve_user(): ?array
 {
     $cookie = (string)($_SERVER['HTTP_COOKIE'] ?? '');
@@ -215,7 +260,9 @@ function resolve_user(): ?array
     $j = $st->fetchColumn();
     if ($j === false) {
         $me = fetch_me($cookie);
-        $db->prepare('INSERT OR REPLACE INTO sess_cache(h,j,exp) VALUES(?,?,?)')->execute([$h, json_encode($me), time() + 45]);
+        if ($me) {
+            $db->prepare('INSERT OR REPLACE INTO sess_cache(h,j,exp) VALUES(?,?,?)')->execute([$h, json_encode($me), time() + 45]);
+        }
         if (random_int(1, 50) === 1) {
             $db->exec('DELETE FROM sess_cache WHERE exp<' . time());
         }
@@ -650,6 +697,9 @@ function main(): void
     $action = (string)($_GET['action'] ?? '');
     if ($action === 'skin_file') {
         serve_skin();
+    }
+    if ($action === 'diag' && ZA_DIAG) {
+        diag();
     }
     if ($action === 'webhook_credit') {
         webhook();
