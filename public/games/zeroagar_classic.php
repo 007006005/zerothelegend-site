@@ -1492,7 +1492,14 @@ function update(dt){
         c.m+=b.m*(1+.06*upLvl('vampire'));c.r=massToRadius(c.m);state.kills++;
         burst(b.x,b.y,b.color,18,240);beep('kill');vib(35);addFeed('Hai divorato '+b.name+' (+'+Math.floor(b.m)+')');
         reviveBot(b);
-      }else if(state.mode!=='zombie'&&state.mode!=='party'&&canEat(b,c)&&d<b.r*.92&&state.fx.shield<=0&&state.inv<=0){die('Un rivale più grande ti ha divorato');return}
+      }else if(state.mode!=='zombie'&&state.mode!=='party'&&canEat(b,c)&&d<b.r*.92&&state.fx.shield<=0&&state.inv<=0){
+        /* perdi solo la cellula mangiata: la partita finisce quando non ne resta nessuna */
+        const idx=state.cells.indexOf(c);
+        if(idx>=0)state.cells.splice(idx,1);
+        burst(c.x,c.y,c.color,18,240);beep('death');vib([60,40,90]);
+        addFeed('💥 '+b.name+' ha divorato una tua parte');
+        if(!state.cells.length){die('Un rivale più grande ti ha divorato');return}
+      }
     }
   }
   if(modeUpdate(dt))return;
