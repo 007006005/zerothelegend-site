@@ -538,7 +538,7 @@ function drawCursorLine(){
 }
 function drawScoreHud(){
   if(!S.showScore||!state.playing)return;
-  const t0='Massa '+Math.floor(state.score)+' · Cellule '+state.cells.length+'/'+MAX_CELLS;const t=window.ZA_T?ZA_T(t0):t0;
+  const t='Massa '+Math.floor(state.score)+' · Cellule '+state.cells.length+'/'+MAX_CELLS;
   ctx.font='bold 18px Arial';ctx.textAlign='center';ctx.lineWidth=4;
   ctx.strokeStyle=S.theme==='dark'?'rgba(0,0,0,.6)':'rgba(255,255,255,.85)';ctx.strokeText(t,W/2,72);
   ctx.fillStyle=S.theme==='dark'?'#e8ecf1':'#222';ctx.fillText(t,W/2,72);
@@ -1299,14 +1299,14 @@ async function loadEco(){
   try{
     state.eco=await econ('state');
     const inbox=state.eco.inbox||[];if(inbox.length)toast(inbox.join(' · '));
-  }catch(e){state.eco=null;state.ecoErr=e.message;console.warn('[ZeroAgar] economia non disponibile',e.message)}
+  }catch(e){state.eco=null;console.warn('[ZeroAgar] economia non disponibile',e.message)}
   renderEcoUI();
 }
 function renderEcoUI(){
   const e=state.eco,p=e&&e.player;
   const ci=document.getElementById('coinInfo');
   if(ci)ci.innerHTML=p?'🪙 <b>'+p.coins+'</b> Zero Coin · 🎟️ Pass '+p.pass.tier+'/30':'';
-  const am=document.getElementById('umAdmin');if(am)am.style.display=((p&&p.is_mod)||(!p&&state.loggedIn))?'block':'none';
+  const am=document.getElementById('umAdmin');if(am)am.style.display=p&&p.is_mod?'block':'none';
   const b=document.getElementById('ecoBanner'),h=[];
   for(const ev of (e&&e.events)||[]){
     const x=ev.type==='announce'?'':' · x'+ev.mult+' '+({xp:'XP',coins:'Zero Coin',pass:'punti Pass',food:'cibo',speed:'velocità'}[ev.type]||'');
@@ -1425,12 +1425,7 @@ function chatAllowed(text){
 let shopTab=0;
 const refreshSheet=()=>loadEco().then(renderSheet);
 function footClose(){const f=el('div','sh-foot'),ok=el('button','green','Chiudi');ok.onclick=closeSheet;f.appendChild(ok);sheet.appendChild(f)}
-function needLogin(body){
-  if(state.loggedIn){
-    body.appendChild(el('div','help','Economia non raggiungibile: '+(state.ecoErr||'?')));
-    const b=el('button','blue','Riprova');b.style.cssText='width:100%;margin:8px 0';b.onclick=refreshSheet;body.appendChild(b);
-  }else body.appendChild(el('div','help','Accedi dal portale per usare shop, skin e Zero Pass.'));
-}
+function needLogin(body){body.appendChild(el('div','help','Accedi dal portale per usare shop, skin e Zero Pass.'))}
 function skinDot(id){
   const st=SKINS[id],s=el('span');
   s.style.cssText='display:inline-block;width:20px;height:20px;border-radius:50%;margin-right:8px;vertical-align:middle;background:'+(st?'radial-gradient(circle at 30% 30%,'+st.join(',')+')':'#1db7ef');return s;
@@ -1548,7 +1543,6 @@ applySettings();
 loadAccount();
 })();
 </script>
-<script src="zeroagar_i18n.js" defer></script>
 <script src="/assets/js/global-arena-chat.js" defer></script>
 </body>
 </html>
