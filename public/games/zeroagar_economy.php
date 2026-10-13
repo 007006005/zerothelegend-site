@@ -11,7 +11,25 @@ declare(strict_types=1);
  * L'utente viene riconosciuto chiamando il tuo ../api/api.php?action=me con i cookie della sessione.
  */
 
-const ZA_DATA_DIR = __DIR__ . '/zeroagar_data';
+/* Cartella dati: usa la prima posizione scrivibile tra quelle elencate */
+function za_pick_dir(): string
+{
+    $cands = [
+        __DIR__ . '/zeroagar_data',
+        dirname(__DIR__) . '/uploads/zeroagar_data',
+        sys_get_temp_dir() . '/zeroagar_data',
+    ];
+    foreach ($cands as $d) {
+        if (!is_dir($d)) {
+            @mkdir($d, 0775, true);
+        }
+        if (is_dir($d) && is_writable($d)) {
+            return $d;
+        }
+    }
+    return $cands[0];
+}
+define('ZA_DATA_DIR', za_pick_dir());
 const ZA_ME_URL = '';   // lascia vuoto per usare automaticamente ../api/api.php?action=me
 const ZA_ADMIN_ROLES = ['admin', 'administrator', 'owner', 'superadmin', 'founder'];
 const ZA_MOD_ROLES = ['mod', 'moderator', 'staff'];
@@ -103,7 +121,7 @@ function setting_defaults(): array
     return [
         'skin_upload_enabled' => '1',
         'skin_auto_approve' => '0',
-        'skin_max_kb' => '1024',
+        'skin_max_kb' => '10240',
         'skin_max_per_user' => '5',
         'payments_mode' => 'off',      // off | demo | external
         'payment_url' => '',
@@ -127,6 +145,10 @@ function settings_all(bool $reset = false): array
         $cache = setting_defaults();
         foreach (db()->query('SELECT k,v FROM settings') as $r) {
             $cache[$r['k']] = (string)$r['v'];
+        }
+        /* il vecchio limite predefinito (1 MB) passa automaticamente a 10 MB */
+        if (($cache['skin_max_kb'] ?? '') === '1024') {
+            $cache['skin_max_kb'] = '10240';
         }
     }
     return $cache;
@@ -239,6 +261,7 @@ function diag(): void
         'me_ruolo' => is_array($j) ? (string)(($j['profile']['role'] ?? $j['user']['role'] ?? '(nessun ruolo)')) : null,
         'curl' => function_exists('curl_init'),
         'pdo_sqlite' => in_array('sqlite', PDO::getAvailableDrivers(), true),
+        'cartella_dati' => ZA_DATA_DIR,
         'cartella_dati_scrivibile' => is_dir(ZA_DATA_DIR) && is_writable(ZA_DATA_DIR),
         'db_ok' => $dbOk,
         'db_errore' => $dbErr,
@@ -786,7 +809,7 @@ function main(): void
             if (!$f || (int)$f['error'] !== UPLOAD_ERR_OK || !is_uploaded_file((string)$f['tmp_name'])) {
                 fail('Upload non riuscito');
             }
-            $maxKb = max(32, (int)setting('skin_max_kb'));
+            $maxKb = min(10240, max(32, (int)setting('skin_max_kb')));   // tetto: 10 MB
             if ((int)$f['size'] > $maxKb * 1024) {
                 fail("File troppo pesante (massimo $maxKb KB)");
             }
@@ -801,8 +824,8 @@ function main(): void
             }
             $w = (int)$info[0];
             $h = (int)$info[1];
-            if ($w < 16 || $h < 16 || $w > 1024 || $h > 1024) {
-                fail('Dimensioni consentite: da 16x16 a 1024x1024 pixel');
+            if ($w < 16 || $h < 16) {
+                fail('Immagine troppo piccola (minimo 16x16 pixel)');
             }
             $ext = ['image/png' => 'png', 'image/jpeg' => 'jpg', 'image/gif' => 'gif', 'image/webp' => 'webp'][$info['mime']] ?? null;
             if (!$ext) {
