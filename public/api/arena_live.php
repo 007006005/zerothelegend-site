@@ -67,7 +67,7 @@ function clean_cells($raw): array {
             'x' => max(0, min(6000, $x)),
             'y' => max(0, min(6000, $y)),
             'm' => max(1, min(2000000, $m)),
-            'r' => max(5, min(1600, sqrt(max(10, $m)))),
+     'r' => max(5, min(1600, isset($c['r']) && is_numeric($c['r']) ? (float)$c['r'] : sqrt(max(10, $m)))),
             'color' => substr((string)($c['color'] ?? '#1db7ef'), 0, 32),
             'team' => isset($c['team']) ? (int)$c['team'] : null,
         ];
