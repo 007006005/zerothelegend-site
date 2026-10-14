@@ -1716,6 +1716,25 @@
           #game-world::before, .starfield-a, .starfield-b, .space-planet, .space-planet-two, .space-satellite, .space-shuttle, .pt-hero::after, #portal::before, #portal::after { animation: none; }
           *, *::before, *::after { scroll-behavior: auto !important; }
       }
+
+      /* ===== Sfondo statico stile hacker (nessuna animazione) ===== */
+      .space-backdrop, #game-world {
+          background:
+            radial-gradient(ellipse at 50% 40%, rgba(0,255,65,.10), transparent 62%),
+            radial-gradient(ellipse at center, transparent 45%, rgba(0,0,0,.78) 100%),
+            repeating-linear-gradient(0deg, rgba(0,0,0,.28) 0 1px, transparent 1px 3px),
+            url('/assets/img/hacker-bg.svg') 0 0 / 960px 720px repeat,
+            #010a04 !important;
+      }
+      .starfield, .starfield-a, .starfield-b, .space-orbit, .space-planet, .space-planet-two,
+      .space-satellite, .space-shuttle, .orbit-label { display: none !important; }
+      #game-world::before, #game-world::after { display: none !important; animation: none !important; }
+      .space-backdrop::after {
+          content: 'root@zero:~# _';
+          position: absolute; left: 18px; bottom: 12px;
+          font: 700 13px 'Courier New', monospace; color: rgba(0,255,65,.55);
+          letter-spacing: .04em;
+      }
       /* ===== Zero Omni Hub: one local media + social control room ===== */
       .omni-shell { width:100%; max-width:1380px !important; margin:0 auto; color:#fff; }
       .omni-hero { position:relative; overflow:hidden; padding:22px; margin-bottom:14px; border:1px solid rgba(255,230,0,.36); border-radius:18px; background:radial-gradient(circle at 88% 12%,rgba(255,230,0,.2),transparent 27%),radial-gradient(circle at 12% 18%,rgba(0,240,255,.2),transparent 35%),linear-gradient(135deg,rgba(10,20,55,.96),rgba(56,12,84,.86)); box-shadow:0 15px 38px rgba(0,0,0,.22); }
@@ -3099,7 +3118,7 @@
         function defaultSettings() {
           return {
             sfxVolume: 0.8, musicVolume: 0.45, mute: false,
-            musicOn: true, uiSounds: true, musicTrack: 'auto', theme: 'neon',
+            musicOn: false, uiSounds: true, musicTrack: 'auto', theme: 'neon',
             questToasts: true, showPortalBtn: true, showCoins: true,
             showMinimap: true, showChat: true, hideBotChatter: false,
             showNames: true, showGrid: true, showTrails: true, showThreatArrows: true,
@@ -4555,6 +4574,7 @@
           return musicGain;
         }
         function musicVol() {
+          return 0;   // musica di sottofondo disattivata
           if (!S || S.mute || S.musicOn === false) return 0;
           return (S.musicVolume !== undefined ? S.musicVolume : 0.45) * 0.5;
         }
@@ -4604,6 +4624,8 @@
           }, 400);
         }
         function playMusic(trackId) {
+          // Musica di sottofondo rimossa: nessun audio di background.
+          stopMusicSource(); musicNow = null; return;
           if (mode !== 'play') return;
           // Background music belongs to gameplay only; the portal is voice-only.
           if (typeof portalOpen !== 'undefined' && portalOpen) {
