@@ -1717,23 +1717,127 @@
           *, *::before, *::after { scroll-behavior: auto !important; }
       }
 
-      /* ===== Sfondo statico stile hacker (nessuna animazione) ===== */
+      /* ===== GAMING SKIN: sfondo statico, stile neon, responsive, leggero ===== */
+      #portal {
+          --g-cyan: #00e5ff; --g-pink: #ff2bd6; --g-lime: #b6ff3b; --g-violet: #7b2cff; --g-gold: #ffd23f;
+          --g-panel: rgba(14, 7, 36, .88); --g-line: rgba(0, 229, 255, .32);
+      }
+      /* Prestazioni: niente blur, niente animazioni continue nel portale, tap immediato */
+      #portal::before, #portal::after { display: none !important; }
+      #portal, #portal *, #portal *::before, #portal *::after {
+          -webkit-backdrop-filter: none !important; backdrop-filter: none !important;
+      }
+      #portal *:not(.global-announcement-track):not(.global-announcement-track *),
+      #portal *::before, #portal *::after { animation: none !important; }
+      #portal * { transition-duration: .12s !important; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+      #portal button, #portal a, #portal select, #portal input { touch-action: manipulation; }
+
+      /* Sfondo */
       .space-backdrop, #game-world {
-          background:
-            radial-gradient(ellipse at 50% 40%, rgba(0,255,65,.10), transparent 62%),
-            radial-gradient(ellipse at center, transparent 45%, rgba(0,0,0,.78) 100%),
-            repeating-linear-gradient(0deg, rgba(0,0,0,.28) 0 1px, transparent 1px 3px),
-            url('/assets/img/hacker-bg.svg') 0 0 / 960px 720px repeat,
-            #010a04 !important;
+          background: radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,.55) 100%),
+                      url('/assets/img/gaming-bg.svg') center bottom / cover no-repeat, #05010f !important;
       }
       .starfield, .starfield-a, .starfield-b, .space-orbit, .space-planet, .space-planet-two,
       .space-satellite, .space-shuttle, .orbit-label { display: none !important; }
       #game-world::before, #game-world::after { display: none !important; animation: none !important; }
-      .space-backdrop::after {
-          content: 'root@zero:~# _';
-          position: absolute; left: 18px; bottom: 12px;
-          font: 700 13px 'Courier New', monospace; color: rgba(0,255,65,.55);
-          letter-spacing: .04em;
+      .space-backdrop::after { content: none !important; }
+
+      /* Barra alta */
+      #pt-top {
+          background: linear-gradient(90deg, rgba(8,3,26,.97), rgba(30,8,58,.97)) !important;
+          border-bottom: 2px solid transparent !important;
+          border-image: linear-gradient(90deg, var(--g-cyan), var(--g-pink), var(--g-lime)) 1 !important;
+          box-shadow: 0 6px 24px rgba(0,0,0,.45);
+      }
+      #pt-logo { font-family: Orbitron, sans-serif; font-weight: 800; text-shadow: 0 0 14px rgba(255,43,214,.55); }
+      #pt-logo span { color: var(--g-cyan) !important; }
+      .pt-icon-btn, #pt-wallet {
+          border-radius: 6px !important; border: 1px solid var(--g-cyan) !important;
+          background: rgba(0,229,255,.1) !important; color: #fff !important;
+          box-shadow: inset 0 0 12px rgba(0,229,255,.12);
+      }
+      .pt-icon-btn:hover, #pt-wallet:hover { background: rgba(255,43,214,.22) !important; border-color: var(--g-pink) !important; }
+      #pt-wallet { border-color: var(--g-gold) !important; color: var(--g-gold) !important; background: rgba(255,210,63,.1) !important; }
+      #pt-global-search, .pt-input, .pt-search {
+          border-radius: 6px !important; border: 1px solid var(--g-line) !important;
+          background: rgba(6,2,20,.9) !important; color: #fff !important;
+      }
+      #pt-global-search:focus, .pt-input:focus { border-color: var(--g-pink) !important; box-shadow: 0 0 0 2px rgba(255,43,214,.25) !important; outline: none; }
+
+      /* Menu laterale a pulsanti (sempre visibile, nessun menu a tendina da aprire) */
+      #pt-nav { background: rgba(8,3,26,.92) !important; border-right: 1px solid var(--g-line) !important; }
+      #pt-nav .pt-nav-label, #pt-nav .pt-page-select { display: none !important; }
+      .gm-nav { display: flex; flex-direction: column; gap: 6px; }
+      .gm-tab {
+          display: flex; align-items: center; gap: 10px; width: 100%; min-height: 48px; padding: 0 14px;
+          border: 1px solid rgba(255,255,255,.08); border-left: 4px solid transparent; border-radius: 4px;
+          background: rgba(255,255,255,.04); color: rgba(255,255,255,.78); cursor: pointer; text-align: left;
+          font: 700 12px Orbitron, sans-serif; letter-spacing: 1.2px; text-transform: uppercase; white-space: nowrap;
+      }
+      .gm-tab .gm-ico { font-size: 18px; width: 24px; text-align: center; flex: none; }
+      .gm-tab:hover { background: rgba(0,229,255,.12); border-left-color: var(--g-cyan); color: #fff; }
+      .gm-tab.on {
+          background: linear-gradient(90deg, rgba(255,43,214,.35), rgba(123,44,255,.25));
+          border-color: var(--g-pink); border-left-color: var(--g-lime); color: #fff;
+          box-shadow: 0 0 16px rgba(255,43,214,.25);
+      }
+
+      /* Corpo, schede, pulsanti */
+      #pt-body { background: linear-gradient(180deg, rgba(5,1,15,.35), rgba(5,1,15,.7)) !important; }
+      .pt-hero {
+          border: 1px solid var(--g-pink) !important; border-radius: 6px !important;
+          background: linear-gradient(120deg, rgba(255,43,214,.28), rgba(123,44,255,.3) 50%, rgba(0,229,255,.2)), rgba(8,3,26,.85) !important;
+          box-shadow: 0 0 26px rgba(255,43,214,.2), inset 0 0 40px rgba(0,229,255,.08) !important;
+          clip-path: polygon(0 0, calc(100% - 22px) 0, 100% 22px, 100% 100%, 22px 100%, 0 calc(100% - 22px));
+      }
+      .pt-hero h1 { text-transform: uppercase; text-shadow: 0 0 18px rgba(0,229,255,.6); }
+      .pt-card, .pt-item, .pt-game, .pt-stat, .pt-quick {
+          background: var(--g-panel) !important; border: 1px solid var(--g-line) !important; border-radius: 6px !important;
+          clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 calc(100% - 12px));
+      }
+      .pt-game:hover, .pt-item:hover, .pt-quick:hover, .pt-card:hover { border-color: var(--g-pink) !important; }
+      .pt-sec { color: var(--g-cyan) !important; text-shadow: 0 0 10px rgba(0,229,255,.5); border-left: 4px solid var(--g-pink); padding-left: 10px; }
+      .pt-kicker { color: var(--g-lime) !important; }
+      .pt-btn {
+          border-radius: 4px !important; border: 1px solid var(--g-cyan) !important; text-transform: uppercase;
+          background: linear-gradient(180deg, rgba(0,229,255,.28), rgba(0,90,160,.35)) !important;
+          box-shadow: 0 0 12px rgba(0,229,255,.2);
+      }
+      .pt-btn.primary { background: linear-gradient(90deg, var(--g-pink), var(--g-violet)) !important; border-color: var(--g-pink) !important; box-shadow: 0 0 18px rgba(255,43,214,.4); }
+      .pt-btn.gold { background: linear-gradient(90deg, #ff9d00, var(--g-gold)) !important; color: #1a0b00 !important; border-color: var(--g-gold) !important; }
+      .pt-btn:active, .gm-tab:active { transform: translateY(1px) scale(.99); }
+      .pt-badge, .pt-chip { border-radius: 3px !important; }
+      #pt-body::-webkit-scrollbar-thumb, #pt-nav::-webkit-scrollbar-thumb { background: var(--g-pink) !important; }
+
+      /* Responsive */
+      #portal { grid-template-columns: 250px minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr) !important; }
+      #pt-top { min-height: 72px !important; padding: 10px 18px !important; }
+      #pt-body > * { max-width: 1180px !important; }
+      @media (max-width: 899px) {
+          #portal, #portal.yt-nav-collapsed {
+              grid-template-columns: minmax(0, 1fr) !important;
+              grid-template-rows: auto auto minmax(0, 1fr) !important;
+              grid-template-areas: "top" "nav" "body" !important;
+          }
+          #portal.yt-nav-collapsed #pt-nav { display: block !important; }
+          #pt-menu-toggle { display: none !important; }
+          #pt-top { min-height: 60px !important; padding: 8px 10px !important; gap: 6px !important; }
+          #pt-nav { padding: 6px 8px !important; border-right: 0 !important; border-bottom: 1px solid var(--g-line) !important; overflow-x: auto; overflow-y: hidden; }
+          .gm-nav { flex-direction: row; gap: 6px; }
+          .gm-tab { width: auto; flex: none; min-height: 42px; padding: 0 12px; border-left-width: 1px; border-bottom: 3px solid transparent; }
+          .gm-tab.on { border-bottom-color: var(--g-lime); }
+          .gm-tab .gm-lbl { font-size: 11px; }
+          #pt-body { padding: 14px 12px 40px !important; }
+          .pt-hero { padding: 16px 14px !important; }
+          .pt-hero h1 { font-size: clamp(20px, 6vw, 28px) !important; }
+          .pt-grid2 { grid-template-columns: 1fr !important; }
+      }
+      @media (max-width: 520px) {
+          .gm-tab .gm-lbl { display: none; }
+          .gm-tab { padding: 0 14px; }
+          .gm-tab .gm-ico { font-size: 20px; }
+          .gm-tab.on .gm-lbl { display: inline; }
+          .pt-btn { min-height: 52px !important; }
       }
       /* ===== Zero Omni Hub: one local media + social control room ===== */
       .omni-shell { width:100%; max-width:1380px !important; margin:0 auto; color:#fff; }
@@ -11520,16 +11624,32 @@
           if (supportForm) supportForm.addEventListener('submit', (e) => { e.preventDefault(); portalSendSupportMessage(supportForm.querySelector('input').value); });
         }
 
+        let ptLangShown = null;
         function renderPortal() {
           if (!portalEl || !ptNavEl || !ptBodyEl) return;
-          renderLanguagePicker();
+          const lang = portalLanguage();
+          if (ptLangShown !== lang) { renderLanguagePicker(); ptLangShown = lang; }
           showLatestGlobalAnnouncement();
-          ptNavEl.innerHTML = '<label class="pt-nav-label" for="pt-page-select">NAVIGAZIONE</label>' +
-            '<select class="pt-page-select" id="pt-page-select" aria-label="Navigazione portale">' +
-            PAGES.map((p) => '<option value="' + p.id + '"' + (p.id === ptPage ? ' selected' : '') + '>' + p.icon + '  ' + portalLabel(p.id) + '</option>').join('') +
-            '</select>';
-          const pageSelect = document.getElementById('pt-page-select');
-          if (pageSelect) pageSelect.addEventListener('change', () => setPtPage(pageSelect.value));
+          // Menu a pulsanti: si costruisce una volta sola, poi si cambia solo la voce attiva
+          if (!ptNavEl.querySelector('.gm-nav') || ptNavEl.dataset.lang !== lang) {
+            ptNavEl.dataset.lang = lang;
+            ptNavEl.innerHTML = '<div class="gm-nav" role="tablist">' +
+              PAGES.map((p) => '<button type="button" class="gm-tab" role="tab" data-page="' + p.id + '"><span class="gm-ico">' + p.icon + '</span><span class="gm-lbl">' + escapeHtml(String(portalLabel(p.id))) + '</span></button>').join('') +
+              '</div>';
+            ptNavEl.querySelector('.gm-nav').addEventListener('click', (e) => {
+              const b = e.target.closest('.gm-tab');
+              if (!b) return;
+              e.preventDefault();
+              playUiSound('tap');
+              setPtPage(b.dataset.page);
+            });
+          }
+          ptNavEl.querySelectorAll('.gm-tab').forEach((b) => {
+            const on = b.dataset.page === ptPage;
+            b.classList.toggle('on', on);
+            b.setAttribute('aria-selected', on ? 'true' : 'false');
+            if (on && b.scrollIntoView) { try { b.scrollIntoView({ block: 'nearest', inline: 'center' }); } catch (_) {} }
+          });
           updateWalletUi();
           (PT_RENDER[ptPage] || renderPtHome)();
           ptBodyEl.querySelectorAll('[data-go]').forEach((b) =>
@@ -11537,9 +11657,6 @@
           ptBodyEl.querySelectorAll('[data-play]:not([data-bd])').forEach((b) =>
             b.addEventListener('click', (e) => { e.preventDefault(); launchGame(b.dataset.play); }));
           renderPortalChatDocks();
-          // Apply the active locale to every visible portal surface, including
-          // legacy cards and social widgets whose templates still contain
-          // authored Italian fallback copy.
           translatePortalDom();
         }
 
@@ -11666,6 +11783,11 @@
           if (dt > 0.11) dt = 0.11;
           if (dt > 0.0005) fpsSmooth += (1 / dt - fpsSmooth) * 0.08;
 
+          // Portale aperto: il gioco e' nascosto, quindi niente rendering (era la causa della lentezza)
+          if (portalOpen || document.body.classList.contains('portal-only')) {
+            setTimeout(() => requestAnimationFrame(gameLoop), 200);
+            return;
+          }
           // Pause / help / user menu freezes gameplay but keeps rendering
           if (mode === 'play' && (paused || helpOpen || userMenuOpen || portalOpen)) {
             render();
