@@ -12,6 +12,7 @@ enforce_same_origin();
 $in = read_json_post();
 $action = (string)($in['action'] ?? 'submit_game_result');
 $pdo = db();
+ensure_arcade_schema();
 
 if ($action !== 'submit_game_result') {
     json_response(['success' => false, 'error' => 'Azione non supportata.'], 400);

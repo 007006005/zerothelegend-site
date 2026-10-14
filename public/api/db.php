@@ -237,6 +237,86 @@ function ensure_portal_auth_schema(): void
     }
 }
 
+/**
+ * Crea (se mancano) le tabelle usate per salvare punteggi e progressi dei giocatori
+ * e aggiunge le colonne che nelle installazioni vecchie potrebbero non esserci.
+ */
+function ensure_arcade_schema(): void
+{
+    static $done = false;
+    if ($done) {
+        return;
+    }
+    try {
+        $pdo = db();
+        $pdo->exec(
+            'CREATE TABLE IF NOT EXISTS arcade_scores (
+                game VARCHAR(40) NOT NULL,
+                user_id VARCHAR(32) NOT NULL,
+                score INT UNSIGNED NOT NULL DEFAULT 0,
+                updated_at DATETIME NOT NULL,
+                PRIMARY KEY (game, user_id),
+                KEY idx_arcade_scores_rank (game, score)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci'
+        );
+        $pdo->exec(
+            'CREATE TABLE IF NOT EXISTS game_progress (
+                game VARCHAR(40) NOT NULL,
+                user_id VARCHAR(32) NOT NULL,
+                best_mass INT UNSIGNED NOT NULL DEFAULT 0,
+                games_played INT UNSIGNED NOT NULL DEFAULT 0,
+                total_kills INT UNSIGNED NOT NULL DEFAULT 0,
+                total_particles INT UNSIGNED NOT NULL DEFAULT 0,
+                total_time INT UNSIGNED NOT NULL DEFAULT 0,
+                last_mass INT UNSIGNED NOT NULL DEFAULT 0,
+                updated_at DATETIME NOT NULL,
+                PRIMARY KEY (game, user_id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci'
+        );
+        // Tabelle già esistenti ma incomplete: aggiungo le colonne mancanti
+        $need = [
+            'game_progress' => [
+                'best_mass' => 'INT UNSIGNED NOT NULL DEFAULT 0',
+                'games_played' => 'INT UNSIGNED NOT NULL DEFAULT 0',
+                'total_kills' => 'INT UNSIGNED NOT NULL DEFAULT 0',
+                'total_particles' => 'INT UNSIGNED NOT NULL DEFAULT 0',
+                'total_time' => 'INT UNSIGNED NOT NULL DEFAULT 0',
+                'last_mass' => 'INT UNSIGNED NOT NULL DEFAULT 0',
+                'updated_at' => 'DATETIME NULL',
+            ],
+            'arcade_scores' => ['updated_at' => 'DATETIME NULL'],
+        ];
+        foreach ($need as $table => $cols) {
+            $have = table_columns($table);
+            foreach ($cols as $name => $def) {
+                if (!isset($have[$name])) {
+                    $pdo->exec('ALTER TABLE `' . $table . '` ADD COLUMN `' . $name . '` ' . $def);
+                }
+            }
+        }
+        // ON DUPLICATE KEY richiede una chiave unica (game, user_id)
+        foreach (['arcade_scores', 'game_progress'] as $table) {
+            $q = $pdo->prepare(
+                'SELECT COUNT(*) FROM information_schema.STATISTICS
+                 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND NON_UNIQUE = 0
+                 GROUP BY INDEX_NAME HAVING COUNT(*) = 2 AND SUM(COLUMN_NAME IN (\'game\',\'user_id\')) = 2'
+            );
+            $q->execute([$table]);
+            if ($q->fetchColumn() === false) {
+                try {
+                    $pdo->exec('ALTER TABLE `' . $table . '` ADD UNIQUE KEY uq_' . $table . '_game_user (game, user_id)');
+                } catch (PDOException $e) {
+                    error_log('ensure_arcade_schema unique key ' . $table . ': ' . $e->getMessage());
+                }
+            }
+        }
+    } catch (Throwable $error) {
+        error_log('ensure_arcade_schema failed: ' . $error->getMessage());
+        json_response(['ok' => false, 'success' => false, 'error' => 'Database non pronto per i salvataggi: ' . $error->getMessage()], 500);
+    }
+    $done = true;
+}
+
 function rate_limited(string $kind, string $ident, int $limit, int $windowSeconds): bool
 {
     ensure_auth_attempts_table();

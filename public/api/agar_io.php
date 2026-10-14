@@ -7,6 +7,7 @@ require_once __DIR__ . '/db.php';
 
 $cur = require_login_api();
 $pdo = db();
+ensure_arcade_schema();
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 $in = $method === 'POST' ? read_json_post() : $_GET;
 $action = (string)($in['action'] ?? 'load');

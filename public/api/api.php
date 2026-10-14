@@ -14,6 +14,7 @@ if ($action === 'me') {
 }
 $u = require_login_api();
 $pdo = db();
+ensure_arcade_schema();
 $game = (string)($in['game'] ?? $_GET['game'] ?? 'zeroagar_classic');
 if ($action === 'game_leaderboard') {
     $limit = max(1, min(20, (int)($in['limit'] ?? $_GET['limit'] ?? 10)));

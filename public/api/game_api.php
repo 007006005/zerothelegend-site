@@ -8,6 +8,7 @@ require_once __DIR__ . '/db.php';
 
 $u = require_login_api();
 $pdo = db();
+ensure_arcade_schema();
 $in = read_json_post();
 $action = (string)($_GET['action'] ?? ($in['action'] ?? ''));
 $game = 'zeroagar_classic';
