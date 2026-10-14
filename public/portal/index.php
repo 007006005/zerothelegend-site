@@ -3892,15 +3892,44 @@
           }
           const reader = new FileReader();
           reader.onload = () => {
-            applySkinDataUrl(String(reader.result), /gif/i.test(file.type) ? 'gif' : 'image');
-            notify('\u2714 Skin applicata', '#00ffa2');
-            unlock('skin', 'Skin personalizzata caricata!');
-            renderSkinPane();
-            updateProfileChip();
-            queueSave();
+            const raw = String(reader.result);
+            const isGif = /gif/i.test(file.type || '') || /\.gif$/i.test(file.name || '');
+            // Il server accetta al massimo ~600 KB per l'immagine profilo: rimpicciolisco
+            // prima di salvarla, cosi' resta visibile anche dopo il ricaricamento.
+            shrinkSkin(raw, isGif, (url, kind) => {
+              if (!url) { notify('\u26A0 Immagine troppo grande o non leggibile', '#ff5c7a'); return; }
+              applySkinDataUrl(url, kind);
+              notify('\u2714 Immagine profilo applicata', '#00ffa2');
+              unlock('skin', 'Skin personalizzata caricata!');
+              renderSkinPane();
+              updateProfileChip();
+              queueSave();
+            });
           };
           reader.onerror = () => notify('\u26A0 Lettura file fallita', '#ff5c7a');
           reader.readAsDataURL(file);
+        }
+        function shrinkSkin(raw, isGif, done) {
+          const LIMIT = 550000;
+          if (isGif && raw.length <= LIMIT) { done(raw, 'gif'); return; }
+          const img = new Image();
+          img.onload = () => {
+            try {
+              const side = 256;
+              const cv = document.createElement('canvas');
+              cv.width = side; cv.height = side;
+              const cx = cv.getContext('2d');
+              const w = img.naturalWidth || img.width || side;
+              const h = img.naturalHeight || img.height || side;
+              const m = Math.min(w, h);
+              cx.drawImage(img, (w - m) / 2, (h - m) / 2, m, m, 0, 0, side, side);
+              let out = cv.toDataURL('image/webp', 0.88);
+              if (!/^data:image\/webp/.test(out)) out = cv.toDataURL('image/jpeg', 0.88);
+              done(out.length <= LIMIT ? out : null, 'image');
+            } catch (_) { done(raw.length <= LIMIT ? raw : null, 'image'); }
+          };
+          img.onerror = () => done(raw.length <= LIMIT ? raw : null, isGif ? 'gif' : 'image');
+          img.src = raw;
         }
         function clearSkin() {
           applySkinDataUrl(null, null);
@@ -4237,7 +4266,7 @@
 
         // --- User menu UI -------------------------------------------
         function avatarStyle() {
-          if (profile.skin) return 'background-image:url(' + profile.skin + ');background-size:cover;background-position:center';
+          if (profile.skin) return "background-image:url('" + String(profile.skin).replace(/['"\\\n\r]/g, '') + "');background-size:cover;background-position:center";
           const col = currentPlayerColor();
           return 'background:radial-gradient(circle at 40% 35%, #ffffff, ' + col + ')';
         }

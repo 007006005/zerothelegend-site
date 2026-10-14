@@ -9,6 +9,7 @@ $game=(string)($in['game']??$_GET['game']??'');
 $games=['neon_snake','zero_breakout','pixel_invaders','cyber_pong','blob_sumo','orbit_miner','laser_maze','stack_tower','zero_tetrix','beat_orbit'];
 if(!in_array($game,$games,true)) json_response(['success'=>false,'error'=>'Gioco non valido.'],400);
 $pdo=db();
+ensure_arcade_schema();
 if($action==='leaderboard'){
   $st=$pdo->prepare('SELECT s.user_id,u.username,s.score FROM arcade_scores s JOIN users u ON u.id=s.user_id WHERE s.game=? AND u.is_banned=0 ORDER BY s.score DESC,s.updated_at ASC LIMIT 10');
   $st->execute([$game]); $rows=$st->fetchAll(); $top=[];$i=1; foreach($rows as $r)$top[]=['rank'=>$i++,'username'=>$r['username'],'score'=>(int)$r['score']];
@@ -25,7 +26,7 @@ if($action==='submit'){
     elseif($best!=(int)$old)$pdo->prepare('UPDATE arcade_scores SET score=?,updated_at=NOW() WHERE game=? AND user_id=?')->execute([$best,$game,$u['id']]);
     // lightweight game progress aggregation stored in game_progress when available
     try{
-      $gp=$pdo->prepare('INSERT INTO game_progress(game,user_id,best_mass,games_played,total_kills,total_particles,total_time,updated_at) VALUES(?,?,?,?,?,?,?,NOW()) ON DUPLICATE KEY UPDATE games_played=games_played+1,updated_at=NOW()');
+      $gp=$pdo->prepare('INSERT INTO game_progress(game,user_id,best_mass,games_played,total_kills,total_particles,total_time,updated_at) VALUES(?,?,?,?,?,?,?,NOW()) ON DUPLICATE KEY UPDATE games_played=games_played+1,best_mass=GREATEST(best_mass,VALUES(best_mass)),last_mass=VALUES(best_mass),total_kills=total_kills+VALUES(total_kills),total_particles=total_particles+VALUES(total_particles),total_time=total_time+VALUES(total_time),updated_at=NOW()');
       $gp->execute([$game,$u['id'],$best,1,(int)($stats['kills']??0),(int)($stats['particles']??0),(int)($stats['seconds']??$stats['duration']??0)]);
     }catch(Throwable $e){}
     $pdo->commit(); json_response(['success'=>true,'best'=>$best,'score'=>$score]);

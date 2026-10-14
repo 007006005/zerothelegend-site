@@ -160,7 +160,7 @@ body.dark .sw{background:#4a5361}body.dark .sw.on{background:#58d100}
 'use strict';
 const API='../api/api.php';
 const ARENA_API='../api/arena_live.php';
-const PORTAL_URL='https://www.zerothelegend.com/portal/index.php';
+const PORTAL_URL='/portal/index.php';
 const canvas=document.getElementById('canvas'),ctx=canvas.getContext('2d');
 const mini=document.getElementById('mini'),mctx=mini.getContext('2d');
 /* Impostazioni salvate nel browser */

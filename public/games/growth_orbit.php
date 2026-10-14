@@ -11488,7 +11488,7 @@
           if (ptBodyEl) ptBodyEl.scrollTop = 0;
         }
 
-        function openPortal(page) { window.location.href = 'https://www.zerothelegend.com/portal/index.php'; }
+        function openPortal(page) { window.location.href = '/portal/index.php'; }
         function closePortal() {
           tutorialStop();
           portalOpen = false;

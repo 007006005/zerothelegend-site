@@ -7,10 +7,10 @@ function esc(string $value): string { return htmlspecialchars($value, ENT_QUOTES
 <script>
 const GAME={slug:"zero_breakout",name:"Zero Breakout"}; const c=document.getElementById('c'),x=c.getContext('2d'); const scoreEl=document.getElementById('score'),bestEl=document.getElementById('best'),lb=document.getElementById('lb');
 function size(){c.width=Math.max(640,innerWidth-(innerWidth>800?320:0))*devicePixelRatio;c.height=innerHeight*devicePixelRatio;x.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0);} addEventListener('resize',size);size();
-async function api(action,payload){const r=await fetch('https://games.zerothelegend.com/api/mini_games.php?action='+encodeURIComponent(action),{method:payload?'POST':'GET',credentials:'include',headers:payload?{'Content-Type':'application/json'}:{},body:payload?JSON.stringify(payload):undefined,cache:'no-store'});const d=await r.json();if(!r.ok||!d.success)throw new Error(d.error||('HTTP '+r.status));return d;}
+async function api(action,payload){const r=await fetch('/api/mini_games.php?action='+encodeURIComponent(action),{method:payload?'POST':'GET',credentials:'same-origin',headers:payload?{'Content-Type':'application/json'}:{},body:payload?JSON.stringify(payload):undefined,cache:'no-store'});const d=await r.json();if(!r.ok||!d.success)throw new Error(d.error||('HTTP '+r.status));return d;}
 async function loadBoard(){try{const d=await api('leaderboard',null);bestEl.textContent=d.mine||0;lb.innerHTML=(d.top||[]).map(r=>`<div class="row"><span>#${r.rank} ${r.username}</span><b>${r.score}</b></div>`).join('')||'<div class="row">Nessun record</div>';}catch(e){lb.innerHTML='<div class="row">Classifica non disponibile</div>';}}
 async function submit(score,stats={}){score=Math.max(0,Math.floor(score));scoreEl.textContent=score;try{const d=await api('submit',{game:GAME.slug,score,stats});bestEl.textContent=d.best||score;}catch(e){console.warn(e);}loadBoard();}
-document.getElementById('back').onclick=()=>location.href='https://www.zerothelegend.com/portal/index.php';
+document.getElementById('back').onclick=()=>location.href='/portal/index.php';
 let run=false,p={x:0,y:0,vx:5,vy:-5},bar=0,blocks=[],score=0;
 function start(){run=true;score=0;bar=innerWidth/2;p={x:innerWidth/2,y:innerHeight-80,vx:5,vy:-5};blocks=[];for(let r=0;r<5;r++)for(let k=0;k<10;k++)blocks.push({x:40+k*75,y:60+r*26,on:1});}
 addEventListener('mousemove',e=>bar=e.clientX);addEventListener('touchmove',e=>bar=e.touches[0].clientX,{passive:true});

@@ -452,12 +452,32 @@ function current_user(bool $refresh = false): ?array
     return $user;
 }
 
+function load_user_state(string $userId): array
+{
+    if ($userId === '') {
+        return [];
+    }
+    try {
+        $st = db()->prepare('SELECT state_json FROM user_state WHERE user_id = ? LIMIT 1');
+        $st->execute([$userId]);
+        $raw = $st->fetchColumn();
+        $data = is_string($raw) ? json_decode($raw, true) : null;
+        return is_array($data) ? $data : [];
+    } catch (Throwable $e) {
+        error_log('load_user_state: ' . $e->getMessage());
+        return [];
+    }
+}
+
 function user_public(array $user): array
 {
     $profile = $user['profile'] ?? [];
     if (!is_array($profile)) {
         $profile = [];
     }
+    // Lo stato completo del portale (progressi, immagine profilo, impostazioni) è in user_state:
+    // senza questa unione veniva salvato ma non veniva mai riletto al caricamento.
+    $profile = array_merge(load_user_state((string)($user['id'] ?? '')), $profile);
 
     foreach (['password', 'password_hash', 'pin', 'serverAuth', 'loggedIn', 'provider'] as $privateKey) {
         unset($profile[$privateKey]);
