@@ -3898,16 +3898,28 @@
             // prima di salvarla, cosi' resta visibile anche dopo il ricaricamento.
             shrinkSkin(raw, isGif, (url, kind) => {
               if (!url) { notify('\u26A0 Immagine troppo grande o non leggibile', '#ff5c7a'); return; }
-              applySkinDataUrl(url, kind);
-              notify('\u2714 Immagine profilo applicata', '#00ffa2');
-              unlock('skin', 'Skin personalizzata caricata!');
-              renderSkinPane();
-              updateProfileChip();
-              queueSave();
+              const finish = (finalUrl, finalKind) => {
+                applySkinDataUrl(finalUrl, finalKind);
+                notify('\u2714 Immagine profilo applicata', '#00ffa2');
+                unlock('skin', 'Skin personalizzata caricata!');
+                renderSkinPane();
+                updateProfileChip();
+                queueSave();
+              };
+              if (!(profile.loggedIn && profile.serverAuth)) { finish(url, kind); return; }
+              avatarRequest({ image: url }).then((d) => finish(d.avatar_url || url, d.avatar_url ? 'image' : kind))
+                .catch((err) => notify('\u26A0 Immagine non salvata: ' + err.message, '#ff5c7a'));
             });
           };
           reader.onerror = () => notify('\u26A0 Lettura file fallita', '#ff5c7a');
           reader.readAsDataURL(file);
+        }
+        async function avatarRequest(body) {
+          const res = await fetch('/api/avatar.php', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), cache: 'no-store' });
+          let data = null;
+          try { data = await res.json(); } catch (_) {}
+          if (!res.ok || !data || data.success !== true) throw new Error((data && data.error) || ('HTTP ' + res.status));
+          return data;
         }
         function shrinkSkin(raw, isGif, done) {
           const LIMIT = 550000;
@@ -3932,6 +3944,7 @@
           img.src = raw;
         }
         function clearSkin() {
+          if (profile.loggedIn && profile.serverAuth) avatarRequest({ action: 'clear' }).catch(() => {});
           applySkinDataUrl(null, null);
           renderSkinPane();
           updateProfileChip();

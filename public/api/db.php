@@ -469,6 +469,21 @@ function load_user_state(string $userId): array
     }
 }
 
+function avatar_url_for(string $userId): ?string
+{
+    if ($userId === '') {
+        return null;
+    }
+    try {
+        $st = db()->prepare('SELECT UNIX_TIMESTAMP(updated_at) FROM user_avatars WHERE user_id = ? LIMIT 1');
+        $st->execute([$userId]);
+        $ts = $st->fetchColumn();
+        return $ts === false ? null : '/api/avatar.php?u=' . rawurlencode($userId) . '&v=' . (int)$ts;
+    } catch (Throwable $e) {
+        return null;   // tabella non ancora creata: nessuna immagine
+    }
+}
+
 function user_public(array $user): array
 {
     $profile = $user['profile'] ?? [];
@@ -483,6 +498,13 @@ function user_public(array $user): array
         unset($profile[$privateKey]);
     }
 
+    // Immagine profilo salvata nel database: ha la precedenza su quella vecchia nello stato
+    $avatarUrl = avatar_url_for((string)($user['id'] ?? ''));
+    if ($avatarUrl !== null) {
+        $profile['skin'] = $avatarUrl;
+        $profile['skinKind'] = 'image';
+    }
+
     return [
         'id' => (string)($user['id'] ?? ''),
         'username' => (string)($user['username'] ?? ''),
@@ -493,6 +515,7 @@ function user_public(array $user): array
         'xp' => (int)($user['xp'] ?? 0),
         'level' => (int)($user['level'] ?? 1),
         'clan' => (string)($user['clan'] ?? 'ZERO'),
+        'avatar_url' => $avatarUrl,
         'profile' => $profile,
     ];
 }

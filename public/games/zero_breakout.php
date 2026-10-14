@@ -33,4 +33,5 @@ function f(){
 document.getElementById('start').onclick=start;requestAnimationFrame(f);
 
 loadBoard();
+api('me',null).then(d=>{const n=document.getElementById('name');if(d.username)n.textContent=d.username;if(d.avatar_url){const i=document.createElement('img');i.src=d.avatar_url;i.alt='';i.style.cssText='width:28px;height:28px;border-radius:50%;object-fit:cover;vertical-align:middle;margin-right:8px;border:2px solid #00f0ff';n.parentNode.insertBefore(i,n.parentNode.firstChild)}}).catch(()=>{});
 </script><script src="/assets/js/global-arena-chat.js" defer></script></body></html>

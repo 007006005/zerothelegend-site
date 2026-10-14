@@ -10,6 +10,7 @@ if ($action === 'me') {
         'id' => $u['id'], 'name' => $u['username'], 'username' => $u['username'], 'loggedIn' => true,
         'provider' => 'ZeroArcade', 'role' => $u['role'], 'coins' => (int)$u['coins'], 'xp' => (int)$u['xp'],
         'level' => (int)$u['level'], 'clan' => $u['clan'],
+        'avatar_url' => avatar_url_for((string)$u['id']),
     ] : null]);
 }
 $u = require_login_api();

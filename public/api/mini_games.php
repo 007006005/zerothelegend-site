@@ -5,6 +5,7 @@ $u=require_login_api();
 enforce_same_origin();
 $in=read_json_post();
 $action=(string)($_GET['action']??($in['action']??''));
+if($action==='me') json_response(['success'=>true,'username'=>$u['username'],'avatar_url'=>avatar_url_for((string)$u['id'])]);
 $game=(string)($in['game']??$_GET['game']??'');
 $games=['neon_snake','zero_breakout','pixel_invaders','cyber_pong','blob_sumo','orbit_miner','laser_maze','stack_tower','zero_tetrix','beat_orbit'];
 if(!in_array($game,$games,true)) json_response(['success'=>false,'error'=>'Gioco non valido.'],400);

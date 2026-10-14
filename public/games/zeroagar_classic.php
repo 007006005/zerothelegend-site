@@ -1074,6 +1074,7 @@ function applyProfileUI(){
   document.getElementById('xpbar').style.width=Math.min(100,(Number(p.xp||0)%1000)/10)+'%';
   const av=document.getElementById('avatar');av.classList.toggle('skin',!!p.equipped?.cell_skin);
   if(p.equipped?.cell_skin)av.style.background=p.equipped.cell_skin;
+  if(p.avatar_url){av.style.backgroundImage="url('"+String(p.avatar_url).replace(/['"\\]/g,'')+"')";av.style.backgroundSize='cover';av.style.backgroundPosition='center'}
 }
 async function loadAccount(){
   try{

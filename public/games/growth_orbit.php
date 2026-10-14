@@ -3620,17 +3620,59 @@
           }
           const reader = new FileReader();
           reader.onload = () => {
-            applySkinDataUrl(String(reader.result), /gif/i.test(file.type) ? 'gif' : 'image');
-            notify('\u2714 Skin applicata', '#00ffa2');
-            unlock('skin', 'Skin personalizzata caricata!');
-            renderSkinPane();
-            updateProfileChip();
-            queueSave();
+            const raw = String(reader.result);
+            const isGif = /gif/i.test(file.type || '') || /\.gif$/i.test(file.name || '');
+            // Il server accetta al massimo ~600 KB per l'immagine profilo: rimpicciolisco
+            // prima di salvarla, cosi' resta visibile anche dopo il ricaricamento.
+            shrinkSkin(raw, isGif, (url, kind) => {
+              if (!url) { notify('\u26A0 Immagine troppo grande o non leggibile', '#ff5c7a'); return; }
+              const finish = (finalUrl, finalKind) => {
+                applySkinDataUrl(finalUrl, finalKind);
+                notify('\u2714 Immagine profilo applicata', '#00ffa2');
+                unlock('skin', 'Skin personalizzata caricata!');
+                renderSkinPane();
+                updateProfileChip();
+                queueSave();
+              };
+              if (!(profile.loggedIn && profile.serverAuth)) { finish(url, kind); return; }
+              avatarRequest({ image: url }).then((d) => finish(d.avatar_url || url, d.avatar_url ? 'image' : kind))
+                .catch((err) => notify('\u26A0 Immagine non salvata: ' + err.message, '#ff5c7a'));
+            });
           };
           reader.onerror = () => notify('\u26A0 Lettura file fallita', '#ff5c7a');
           reader.readAsDataURL(file);
         }
+        async function avatarRequest(body) {
+          const res = await fetch('/api/avatar.php', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), cache: 'no-store' });
+          let data = null;
+          try { data = await res.json(); } catch (_) {}
+          if (!res.ok || !data || data.success !== true) throw new Error((data && data.error) || ('HTTP ' + res.status));
+          return data;
+        }
+        function shrinkSkin(raw, isGif, done) {
+          const LIMIT = 550000;
+          if (isGif && raw.length <= LIMIT) { done(raw, 'gif'); return; }
+          const img = new Image();
+          img.onload = () => {
+            try {
+              const side = 256;
+              const cv = document.createElement('canvas');
+              cv.width = side; cv.height = side;
+              const cx = cv.getContext('2d');
+              const w = img.naturalWidth || img.width || side;
+              const h = img.naturalHeight || img.height || side;
+              const m = Math.min(w, h);
+              cx.drawImage(img, (w - m) / 2, (h - m) / 2, m, m, 0, 0, side, side);
+              let out = cv.toDataURL('image/webp', 0.88);
+              if (!/^data:image\/webp/.test(out)) out = cv.toDataURL('image/jpeg', 0.88);
+              done(out.length <= LIMIT ? out : null, 'image');
+            } catch (_) { done(raw.length <= LIMIT ? raw : null, 'image'); }
+          };
+          img.onerror = () => done(raw.length <= LIMIT ? raw : null, isGif ? 'gif' : 'image');
+          img.src = raw;
+        }
         function clearSkin() {
+          if (profile.loggedIn && profile.serverAuth) avatarRequest({ action: 'clear' }).catch(() => {});
           applySkinDataUrl(null, null);
           renderSkinPane();
           updateProfileChip();
@@ -3965,7 +4007,7 @@
 
         // --- User menu UI -------------------------------------------
         function avatarStyle() {
-          if (profile.skin) return 'background-image:url(' + profile.skin + ');background-size:cover;background-position:center';
+          if (profile.skin) return "background-image:url('" + String(profile.skin).replace(/['"\\\n\r]/g, '') + "');background-size:cover;background-position:center";
           const col = currentPlayerColor();
           return 'background:radial-gradient(circle at 40% 35%, #ffffff, ' + col + ')';
         }
